@@ -35,13 +35,17 @@ export default function AdminKamarPage() {
 
   // Multi-selection state for Bulk Actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [lastSelectedIdx, setLastSelectedIdx] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragMode, setDragMode] = useState<'SELECT' | 'DESELECT' | null>(null);
+
   const [isBulkLimitModalOpen, setIsBulkLimitModalOpen] = useState(false);
   const [bulkNewLimit, setBulkNewLimit] = useState<number>(2);
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
   // Single Edit Limit Drawer State
   const [editingKamar, setEditingKamar] = useState<KamarOverview | null>(null);
-  const [newLimit, setNewLimit] = useState<number>(1);
+  const [newLimit, setNewLimit] = useState<number>(2);
   const [isSavingLimit, setIsSavingLimit] = useState(false);
 
   // Compare Revision Changes Modal State
@@ -68,6 +72,16 @@ export default function AdminKamarPage() {
     loadData();
   }, []);
 
+  // Global mouseup to cancel dragging
+  useEffect(() => {
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setDragMode(null);
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
+
   const filteredKamar = kamarList.filter((k) =>
     k.nama_kamar.toLowerCase().includes(search.toLowerCase())
   );
@@ -82,10 +96,36 @@ export default function AdminKamarPage() {
     }
   };
 
-  const handleToggleSelectRow = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+  const handleRowMouseDown = (id: string, index: number, event: React.MouseEvent) => {
+    if (event.shiftKey && lastSelectedIdx !== null) {
+      const start = Math.min(lastSelectedIdx, index);
+      const end = Math.max(lastSelectedIdx, index);
+      const rangeIds = filteredKamar.slice(start, end + 1).map((k) => k.id);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...rangeIds])));
+      setLastSelectedIdx(index);
+      return;
+    }
+
+    const isCurrentlySelected = selectedIds.includes(id);
+    const mode = isCurrentlySelected ? 'DESELECT' : 'SELECT';
+    setIsDragging(true);
+    setDragMode(mode);
+    setLastSelectedIdx(index);
+
+    if (mode === 'SELECT') {
+      setSelectedIds((prev) => [...prev, id]);
+    } else {
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+    }
+  };
+
+  const handleRowMouseEnter = (id: string) => {
+    if (!isDragging || !dragMode) return;
+    if (dragMode === 'SELECT') {
+      setSelectedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    } else if (dragMode === 'DESELECT') {
+      setSelectedIds((prev) => prev.filter((item) => item !== id));
+    }
   };
 
   const handleToggleAdaPiket = async (k: KamarOverview) => {
@@ -179,7 +219,7 @@ export default function AdminKamarPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 select-none">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
         <div>
@@ -187,7 +227,7 @@ export default function AdminKamarPage() {
             Manajemen Kamar
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Atur status tugas piket per kamar, batas kuota limit, edit masal, dan periksa riwayat revisi penetapan.
+            Atur status tugas piket per kamar, batas kuota limit, drag untuk pilih masal, dan periksa riwayat revisi penetapan.
           </p>
         </div>
 
@@ -272,7 +312,7 @@ export default function AdminKamarPage() {
           />
         </div>
         <div className="text-xs text-slate-500 font-medium">
-          Total: {filteredKamar.length} kamar
+          Total: {filteredKamar.length} kamar (Tahan drag/shift untuk pilih banyak)
         </div>
       </div>
 
@@ -314,23 +354,40 @@ export default function AdminKamarPage() {
                   return (
                     <tr
                       key={k.id}
-                      className={`hover:bg-slate-50/70 transition-colors ${
-                        isSelected ? 'bg-slate-50 font-medium' : ''
+                      onMouseEnter={() => handleRowMouseEnter(k.id)}
+                      className={`hover:bg-slate-50/70 transition-colors cursor-pointer select-none ${
+                        isSelected ? 'bg-slate-100 font-medium' : ''
                       }`}
                     >
-                      <td className="text-center">
+                      <td
+                        className="text-center py-2"
+                        onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)}
+                      >
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={() => handleToggleSelectRow(k.id)}
+                          onChange={() => {}} // handled by onMouseDown & drag
                           className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
                         />
                       </td>
-                      <td className="text-slate-400 text-xs w-8">{idx + 1}</td>
-                      <td className="font-semibold text-slate-900">{k.nama_kamar}</td>
+                      <td 
+                        className="text-slate-400 text-xs w-8"
+                        onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)}
+                      >
+                        {idx + 1}
+                      </td>
+                      <td 
+                        className="font-semibold text-slate-900"
+                        onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)}
+                      >
+                        {k.nama_kamar}
+                      </td>
                       <td>
                         <button
-                          onClick={() => handleToggleAdaPiket(k)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleAdaPiket(k);
+                          }}
                           className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-colors ${
                             k.ada_piket
                               ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
@@ -341,11 +398,11 @@ export default function AdminKamarPage() {
                           {k.ada_piket ? 'Ada Piket' : 'Non-Piket'}
                         </button>
                       </td>
-                      <td>{k.total_guru} orang</td>
-                      <td className="font-semibold">
+                      <td onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)}>{k.total_guru} orang</td>
+                      <td onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)} className="font-semibold">
                         {k.ada_piket ? `${k.limit_piket} orang` : '-'}
                       </td>
-                      <td>
+                      <td onMouseDown={(e) => handleRowMouseDown(k.id, idx, e)}>
                         {k.ada_piket ? (
                           <>
                             <span className={k.total_piket_terpilih >= k.limit_piket ? 'text-emerald-700 font-semibold' : ''}>
@@ -360,7 +417,10 @@ export default function AdminKamarPage() {
                       <td>
                         {k.has_revisions ? (
                           <button
-                            onClick={() => setInspectingRevisionKamar(k)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setInspectingRevisionKamar(k);
+                            }}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200 transition-colors"
                           >
                             <History className="h-3 w-3" />
@@ -374,7 +434,10 @@ export default function AdminKamarPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleOpenEditLimit(k)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenEditLimit(k);
+                          }}
                           disabled={!k.ada_piket}
                           className="h-7 px-2 text-xs"
                         >
@@ -384,7 +447,10 @@ export default function AdminKamarPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleOpenReset(k)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenReset(k);
+                          }}
                           disabled={k.total_piket_terpilih === 0}
                           className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                         >
@@ -420,13 +486,24 @@ export default function AdminKamarPage() {
             <label className="block font-semibold text-slate-700 mb-1.5">
               Batas Kuota Baru (Orang per Kamar):
             </label>
-            <div className="flex items-center gap-3">
-              {[1, 2, 3, 4, 5].map((val) => (
+            <div className="flex items-center gap-2 mb-3">
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                value={bulkNewLimit}
+                onChange={(e) => setBulkNewLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                className="font-bold text-sm"
+              />
+            </div>
+            <div className="text-[11px] text-slate-500 mb-1.5">Pilihan Cepat:</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {[1, 2, 3, 4, 5, 6, 8, 10].map((val) => (
                 <button
                   key={val}
                   type="button"
                   onClick={() => setBulkNewLimit(val)}
-                  className={`flex-1 py-2 rounded-lg border font-bold text-sm transition-all ${
+                  className={`px-3 py-1.5 rounded-lg border font-bold text-xs transition-all ${
                     bulkNewLimit === val
                       ? 'border-slate-900 bg-slate-900 text-white shadow-xs'
                       : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
@@ -457,7 +534,7 @@ export default function AdminKamarPage() {
               onClick={handleExecuteBulkLimit}
               disabled={isProcessingBulk}
             >
-              {isProcessingBulk ? 'Menyimpan...' : 'Terapkan ke Semua'}
+              {isProcessingBulk ? 'Menyimpan...' : `Terapkan (${bulkNewLimit} Orang)`}
             </Button>
           </div>
         </div>
@@ -541,17 +618,34 @@ export default function AdminKamarPage() {
       >
         {editingKamar && (
           <div className="space-y-5 text-xs">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <label className="font-semibold text-slate-700 block">
                 Batas Kuota Limit (Orang)
               </label>
               <Input
                 type="number"
                 min={0}
-                max={10}
+                max={100}
                 value={newLimit}
-                onChange={(e) => setNewLimit(parseInt(e.target.value) || 0)}
+                onChange={(e) => setNewLimit(Math.max(0, parseInt(e.target.value) || 0))}
+                className="font-bold text-sm"
               />
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                {[1, 2, 3, 4, 5, 6, 8, 10].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setNewLimit(val)}
+                    className={`px-2.5 py-1 rounded-md border text-xs font-semibold transition-all ${
+                      newLimit === val
+                        ? 'border-slate-900 bg-slate-900 text-white'
+                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    {val}
+                  </button>
+                ))}
+              </div>
               <p className="text-[11px] text-slate-500">
                 Kamar ini saat ini memiliki {editingKamar.total_piket_terpilih} guru piket terpilih dari total {editingKamar.total_guru} anggota.
               </p>

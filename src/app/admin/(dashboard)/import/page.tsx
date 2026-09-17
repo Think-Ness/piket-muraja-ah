@@ -213,19 +213,21 @@ export default function AdminImportPage() {
           <div className="rounded-lg border border-slate-200 bg-white p-5 text-xs space-y-3">
             <div className="flex items-center gap-2 font-semibold text-slate-900 text-sm">
               <Info className="h-4 w-4 text-slate-500" />
-              <span>Format Kolom Wajib Template Excel:</span>
+              <span>Format Kolom Wajib & Opsional Template Excel:</span>
             </div>
             <p className="text-slate-600 leading-relaxed">
-              Pastikan file Excel memiliki baris header pertama dengan susunan kolom berikut:
+              Pastikan file Excel memiliki baris header pertama. Kolom <strong>RNK, Nama, Kamar, Tahun</strong> adalah standar. Anda juga dapat menambahkan kolom custom opsional <strong>Limit_Kamar</strong> (angka batas kuota) dan <strong>Ada_Piket</strong> (Ya/Tidak):
             </p>
             <div className="overflow-x-auto">
               <table className="border border-slate-200 text-slate-800 rounded bg-slate-50 text-xs w-full text-left">
                 <thead>
                   <tr className="border-b border-slate-200 font-semibold bg-slate-100">
-                    <th className="p-2 w-16">RNK</th>
+                    <th className="p-2 w-14">RNK</th>
                     <th className="p-2">Nama</th>
                     <th className="p-2">Kamar</th>
                     <th className="p-2">Tahun</th>
+                    <th className="p-2">Limit_Kamar <span className="text-[10px] text-slate-500">(Opsional)</span></th>
+                    <th className="p-2">Ada_Piket <span className="text-[10px] text-slate-500">(Opsional)</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -234,6 +236,8 @@ export default function AdminImportPage() {
                     <td className="p-2">K.H. Hasan Abdullah Sahal</td>
                     <td className="p-2 font-medium">Gontor</td>
                     <td className="p-2">1447-1448</td>
+                    <td className="p-2 font-semibold text-slate-700">2 <span className="text-[10px] text-slate-400">(Default)</span></td>
+                    <td className="p-2 font-semibold text-emerald-700">Ya <span className="text-[10px] text-slate-400">(Default)</span></td>
                   </tr>
                 </tbody>
               </table>

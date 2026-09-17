@@ -30,6 +30,25 @@ export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
         normalizedRow.Kamar = val;
       } else if (trimmedKey === 'tahun' || trimmedKey === 'thn' || trimmedKey === 'tahun ajaran') {
         normalizedRow.Tahun = val;
+      } else if (
+        trimmedKey === 'limit' ||
+        trimmedKey === 'limit_kamar' ||
+        trimmedKey === 'limit kamar' ||
+        trimmedKey === 'kuota' ||
+        trimmedKey === 'kuota piket' ||
+        trimmedKey === 'limit piket' ||
+        trimmedKey === 'limit_piket'
+      ) {
+        normalizedRow.Limit_Kamar = val;
+      } else if (
+        trimmedKey === 'ada_piket' ||
+        trimmedKey === 'ada piket' ||
+        trimmedKey === 'piket' ||
+        trimmedKey === 'status piket' ||
+        trimmedKey === 'status_piket' ||
+        trimmedKey === 'is_piket'
+      ) {
+        normalizedRow.Ada_Piket = val;
       } else {
         normalizedRow[key] = val;
       }

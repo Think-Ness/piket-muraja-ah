@@ -179,7 +179,7 @@ export const DataService = {
           const settings = settingsRes.data || memorySettings;
           let rooms = kamarRes.data;
           if (options?.onlyPiket) {
-            rooms = rooms.filter((k) => (k.ada_piket ?? true) && k.aktif && !isJunkCategory(k.nama_kamar));
+            rooms = rooms.filter((k) => (k.limit_piket ?? 2) > 0 && k.aktif && !isJunkCategory(k.nama_kamar));
           }
           const allGurus = guruRes.data || [];
           const allSubs = subRes.data || [];
@@ -197,8 +197,8 @@ export const DataService = {
             const initialGuruNames = firstSub ? (firstSub.piket_submission_members || []).map((m: any) => m.guru?.nama || 'Guru') : [];
             const latestGuruNames = latestSub ? (latestSub.piket_submission_members || []).map((m: any) => m.guru?.nama || 'Guru') : [];
 
-            const limitPiket = k.limit_piket ?? 1;
-            const adaPiket = k.ada_piket ?? true;
+            const limitPiket = k.limit_piket ?? 2;
+            const adaPiket = limitPiket > 0;
 
             let status_penetapan: KamarOverview['status_penetapan'] = 'Belum ditetapkan';
             if (!k.aktif) {
@@ -314,10 +314,10 @@ export const DataService = {
           .order('urutan');
         if (!error && data && data.length > 0) {
           return data
-            .filter((k) => (k.ada_piket ?? true) && !isJunkCategory(k.nama_kamar))
+            .filter((k) => (k.limit_piket ?? 2) > 0 && !isJunkCategory(k.nama_kamar))
             .map((k) => ({
               ...k,
-              ada_piket: k.ada_piket ?? true,
+              ada_piket: (k.limit_piket ?? 2) > 0,
             }));
         }
       } catch (err) {
@@ -486,17 +486,18 @@ export const DataService = {
   },
 
   async toggleKamarAdaPiket(kamarId: string, adaPiket: boolean, actor = 'Admin'): Promise<Kamar> {
+    const newLimit = adaPiket ? 2 : 0;
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('kamar')
-          .update({ ada_piket: adaPiket, updated_at: new Date().toISOString() })
+          .update({ limit_piket: newLimit, updated_at: new Date().toISOString() })
           .eq('id', kamarId)
           .select()
           .single();
         if (!error && data) {
-          return { ...data, ada_piket: data.ada_piket ?? true };
+          return { ...data, ada_piket: (data.limit_piket ?? 2) > 0 };
         }
       } catch (err) {
         console.warn('Supabase toggleKamarAdaPiket fallback:', err);
@@ -508,6 +509,7 @@ export const DataService = {
 
     const oldVal = kamar.ada_piket;
     kamar.ada_piket = adaPiket;
+    kamar.limit_piket = newLimit;
     kamar.updated_at = new Date().toISOString();
 
     memoryAuditLogs.unshift({
@@ -516,8 +518,8 @@ export const DataService = {
       action: 'TOGGLE_KAMAR_PIKET',
       entity_type: 'kamar',
       entity_id: kamarId,
-      old_data: { ada_piket: oldVal, nama_kamar: kamar.nama_kamar },
-      new_data: { ada_piket: kamar.ada_piket, nama_kamar: kamar.nama_kamar },
+      old_data: { ada_piket: oldVal, limit_piket: oldVal ? 2 : 0, nama_kamar: kamar.nama_kamar },
+      new_data: { ada_piket: kamar.ada_piket, limit_piket: newLimit, nama_kamar: kamar.nama_kamar },
       created_at: new Date().toISOString(),
     });
 
@@ -526,12 +528,13 @@ export const DataService = {
 
   async bulkToggleKamarAdaPiket(kamarIds: string[], adaPiket: boolean, actor = 'Admin'): Promise<void> {
     if (kamarIds.length === 0) return;
+    const newLimit = adaPiket ? 2 : 0;
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
         await supabase
           .from('kamar')
-          .update({ ada_piket: adaPiket, updated_at: new Date().toISOString() })
+          .update({ limit_piket: newLimit, updated_at: new Date().toISOString() })
           .in('id', kamarIds);
       } catch (err) {
         console.warn('Supabase bulkToggleKamarAdaPiket fallback:', err);
@@ -541,6 +544,7 @@ export const DataService = {
     memoryKamar.forEach((k) => {
       if (kamarIds.includes(k.id)) {
         k.ada_piket = adaPiket;
+        k.limit_piket = newLimit;
         k.updated_at = new Date().toISOString();
       }
     });
@@ -551,7 +555,7 @@ export const DataService = {
       action: 'BULK_TOGGLE_KAMAR_PIKET',
       entity_type: 'kamar',
       entity_id: kamarIds.join(','),
-      new_data: { ada_piket: adaPiket, total_kamar: kamarIds.length },
+      new_data: { ada_piket: adaPiket, limit_piket: newLimit, total_kamar: kamarIds.length },
       created_at: new Date().toISOString(),
     });
   },
@@ -872,7 +876,7 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        let query = supabase.from('guru').select('*, kamar(*)', { count: 'exact' }).eq('aktif', true);
+        let query = supabase.from('guru').select('*, kamar(*)', { count: 'exact' });
 
         if (params?.kamarId && params.kamarId !== 'ALL') {
           query = query.eq('kamar_id', params.kamarId);
@@ -891,7 +895,7 @@ export const DataService = {
         if (!error && data) {
           const cleaned = data.filter((g) => !isJunkCategory(g.nama)).map((g) => ({
             ...g,
-            kamar: g.kamar ? { ...g.kamar, ada_piket: g.kamar.ada_piket ?? true } : undefined,
+            kamar: g.kamar ? { ...g.kamar, ada_piket: (g.kamar.limit_piket ?? 2) > 0 } : undefined,
           }));
           return { gurus: cleaned, total: count || cleaned.length };
         }
@@ -923,6 +927,187 @@ export const DataService = {
     return { gurus: paginated, total };
   },
 
+  async createGuru(
+    payload: { nama: string; kamar_id: string; rnk?: number | null; tahun?: string; aktif?: boolean },
+    actor = 'Admin'
+  ): Promise<Guru> {
+    const trimmedNama = payload.nama.trim();
+    if (!trimmedNama) throw new Error('Nama guru tidak boleh kosong.');
+    if (!payload.kamar_id) throw new Error('Kamar harus dipilih.');
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('guru')
+          .insert({
+            nama: trimmedNama,
+            kamar_id: payload.kamar_id,
+            rnk: payload.rnk || 999,
+            tahun: payload.tahun || '1447-1448',
+            aktif: payload.aktif ?? true,
+          })
+          .select('*, kamar(*)')
+          .single();
+
+        if (error || !data) {
+          throw new Error(error?.message || 'Gagal menambahkan data guru ke Supabase.');
+        }
+
+        await supabase.from('audit_logs').insert({
+          actor_id: actor,
+          action: 'CREATE_GURU',
+          entity_type: 'guru',
+          entity_id: data.id,
+          new_data: { nama: data.nama, kamar_id: data.kamar_id },
+        });
+
+        return {
+          ...data,
+          kamar: data.kamar ? { ...data.kamar, ada_piket: (data.kamar.limit_piket ?? 2) > 0 } : undefined,
+        };
+      } catch (err: any) {
+        console.warn('Supabase createGuru fallback:', err);
+      }
+    }
+
+    const kamar = memoryKamar.find((k) => k.id === payload.kamar_id);
+    const newGuru: Guru = {
+      id: `g_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      nama: trimmedNama,
+      kamar_id: payload.kamar_id,
+      rnk: payload.rnk || memoryGuru.length + 1,
+      tahun: payload.tahun || '1447-1448',
+      aktif: payload.aktif ?? true,
+      kamar,
+      created_at: new Date().toISOString(),
+    };
+
+    memoryGuru.push(newGuru);
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'CREATE_GURU',
+      entity_type: 'guru',
+      entity_id: newGuru.id,
+      new_data: { nama: newGuru.nama, kamar_id: newGuru.kamar_id },
+      created_at: new Date().toISOString(),
+    });
+
+    return newGuru;
+  },
+
+  async updateGuru(
+    guruId: string,
+    payload: Partial<{ nama: string; kamar_id: string; rnk: number | null; tahun: string; aktif: boolean }>,
+    actor = 'Admin'
+  ): Promise<Guru> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const updatePayload: Record<string, any> = { updated_at: new Date().toISOString() };
+        if (payload.nama !== undefined) updatePayload.nama = payload.nama.trim();
+        if (payload.kamar_id !== undefined) updatePayload.kamar_id = payload.kamar_id;
+        if (payload.rnk !== undefined) updatePayload.rnk = payload.rnk;
+        if (payload.tahun !== undefined) updatePayload.tahun = payload.tahun;
+        if (payload.aktif !== undefined) updatePayload.aktif = payload.aktif;
+
+        const { data, error } = await supabase
+          .from('guru')
+          .update(updatePayload)
+          .eq('id', guruId)
+          .select('*, kamar(*)')
+          .single();
+
+        if (error || !data) {
+          throw new Error(error?.message || 'Gagal memperbarui data guru.');
+        }
+
+        await supabase.from('audit_logs').insert({
+          actor_id: actor,
+          action: 'UPDATE_GURU',
+          entity_type: 'guru',
+          entity_id: guruId,
+          new_data: updatePayload,
+        });
+
+        return {
+          ...data,
+          kamar: data.kamar ? { ...data.kamar, ada_piket: (data.kamar.limit_piket ?? 2) > 0 } : undefined,
+        };
+      } catch (err: any) {
+        console.warn('Supabase updateGuru fallback:', err);
+      }
+    }
+
+    const guru = memoryGuru.find((g) => g.id === guruId);
+    if (!guru) throw new Error('Guru tidak ditemukan.');
+
+    if (payload.nama !== undefined) guru.nama = payload.nama.trim();
+    if (payload.kamar_id !== undefined) {
+      guru.kamar_id = payload.kamar_id;
+      guru.kamar = memoryKamar.find((k) => k.id === payload.kamar_id);
+    }
+    if (payload.rnk !== undefined) guru.rnk = payload.rnk;
+    if (payload.tahun !== undefined) guru.tahun = payload.tahun;
+    if (payload.aktif !== undefined) guru.aktif = payload.aktif;
+    guru.updated_at = new Date().toISOString();
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'UPDATE_GURU',
+      entity_type: 'guru',
+      entity_id: guruId,
+      new_data: payload,
+      created_at: new Date().toISOString(),
+    });
+
+    return { ...guru };
+  },
+
+  async deleteGuru(guruId: string, actor = 'Admin'): Promise<{ success: boolean; message: string }> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        // Remove from active submission members first if any
+        await supabase.from('piket_submission_members').delete().eq('guru_id', guruId);
+        const { error } = await supabase.from('guru').delete().eq('id', guruId);
+        if (error) {
+          throw new Error(error.message);
+        }
+
+        await supabase.from('audit_logs').insert({
+          actor_id: actor,
+          action: 'DELETE_GURU',
+          entity_type: 'guru',
+          entity_id: guruId,
+        });
+
+        return { success: true, message: 'Data guru berhasil dihapus.' };
+      } catch (err: any) {
+        console.warn('Supabase deleteGuru fallback:', err);
+      }
+    }
+
+    const idx = memoryGuru.findIndex((g) => g.id === guruId);
+    if (idx === -1) throw new Error('Guru tidak ditemukan.');
+    const deleted = memoryGuru.splice(idx, 1)[0];
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'DELETE_GURU',
+      entity_type: 'guru',
+      entity_id: guruId,
+      old_data: { nama: deleted.nama },
+      created_at: new Date().toISOString(),
+    });
+
+    return { success: true, message: `Data guru ${deleted.nama} berhasil dihapus.` };
+  },
+
   // 5. Histori Piket & Submissions
   async getPiketSubmissions(): Promise<PiketSubmission[]> {
     if (isSupabaseConfigured()) {
@@ -945,7 +1130,7 @@ export const DataService = {
             version: 1,
             is_revision: false,
             replaced_submission_id: null,
-            kamar: s.kamar ? { ...s.kamar, ada_piket: s.kamar.ada_piket ?? true } : undefined,
+            kamar: s.kamar ? { ...s.kamar, ada_piket: (s.kamar.limit_piket ?? 2) > 0 } : undefined,
             members: (s.piket_submission_members || []).map((m: any) => ({
               id: m.id,
               submission_id: s.id,
@@ -987,6 +1172,20 @@ export const DataService = {
       (r) => !isJunkCategory(r.nama) && !isJunkCategory(r.nama_kamar)
     );
 
+    // Build per-room custom configuration map (limit & ada_piket)
+    const roomConfigMap = new Map<string, { limit_piket: number; ada_piket: boolean }>();
+    for (const r of cleanedRows) {
+      const normKey = r.nama_kamar.toLowerCase().trim();
+      if (!roomConfigMap.has(normKey)) {
+        const adaPiket = r.ada_piket !== false;
+        let limit = adaPiket ? 2 : 0;
+        if (r.limit_kamar !== undefined && r.limit_kamar !== null) {
+          limit = r.limit_kamar;
+        }
+        roomConfigMap.set(normKey, { limit_piket: limit, ada_piket: limit > 0 });
+      }
+    }
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -1010,12 +1209,15 @@ export const DataService = {
 
         const roomsToInsert = uniqueRoomNames
           .filter((name) => !roomMap.has(name.toLowerCase()))
-          .map((name, idx) => ({
-            nama_kamar: name,
-            limit_piket: 2,
-            aktif: true,
-            urutan: roomMap.size + idx + 1,
-          }));
+          .map((name, idx) => {
+            const cfg = roomConfigMap.get(name.toLowerCase().trim()) || { limit_piket: 2, ada_piket: true };
+            return {
+              nama_kamar: name,
+              limit_piket: cfg.limit_piket,
+              aktif: true,
+              urutan: roomMap.size + idx + 1,
+            };
+          });
 
         if (roomsToInsert.length > 0) {
           const { data: newRooms, error: rErr } = await supabase
@@ -1115,17 +1317,21 @@ export const DataService = {
         let existingKamar = memoryKamar.find(
           (k) => k.nama_kamar.toLowerCase() === r.nama_kamar.toLowerCase()
         );
+        const cfg = roomConfigMap.get(r.nama_kamar.toLowerCase().trim()) || { limit_piket: 2, ada_piket: true };
         if (!existingKamar) {
           existingKamar = {
             id: `k_${Date.now()}_${Math.random().toString(36).substring(7)}`,
             nama_kamar: r.nama_kamar,
-            limit_piket: 2,
-            ada_piket: true,
+            limit_piket: cfg.limit_piket,
+            ada_piket: cfg.ada_piket,
             aktif: true,
             urutan: memoryKamar.length + 1,
             created_at: new Date().toISOString(),
           };
           memoryKamar.push(existingKamar);
+        } else {
+          existingKamar.limit_piket = cfg.limit_piket;
+          existingKamar.ada_piket = cfg.ada_piket;
         }
         roomMap.set(r.nama_kamar, existingKamar.id);
       }

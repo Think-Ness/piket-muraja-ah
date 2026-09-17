@@ -42,6 +42,31 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       warnings.push('Kolom Tahun kosong. Akan menggunakan default tahun kegiatan aktif.');
     }
 
+    // Process optional Ada_Piket
+    let ada_piket = true;
+    if (row.Ada_Piket !== undefined && row.Ada_Piket !== null && String(row.Ada_Piket).trim() !== '') {
+      const piketStr = String(row.Ada_Piket).trim().toLowerCase();
+      if (['tidak', 'false', '0', 'tidak ada', 'non', 'non-piket', 'off', 'bukan'].includes(piketStr)) {
+        ada_piket = false;
+      } else {
+        ada_piket = true;
+      }
+    }
+
+    // Process optional Limit_Kamar
+    let limit_kamar = ada_piket ? 2 : 0;
+    if (row.Limit_Kamar !== undefined && row.Limit_Kamar !== null && String(row.Limit_Kamar).trim() !== '') {
+      const parsedLimit = parseInt(String(row.Limit_Kamar).trim(), 10);
+      if (!isNaN(parsedLimit) && parsedLimit >= 0) {
+        limit_kamar = parsedLimit;
+        if (limit_kamar === 0) {
+          ada_piket = false;
+        }
+      } else {
+        warnings.push(`Nilai limit '${row.Limit_Kamar}' tidak valid. Menggunakan default (${ada_piket ? 2 : 0}).`);
+      }
+    }
+
     // Duplicate detection in file
     if (nama && nama_kamar) {
       const key = `${nama.toLowerCase()}___${nama_kamar.toLowerCase()}`;
@@ -69,6 +94,8 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       nama,
       nama_kamar,
       tahun: tahun || '1447-1448',
+      limit_kamar,
+      ada_piket,
       isValid,
       errors,
       warnings,

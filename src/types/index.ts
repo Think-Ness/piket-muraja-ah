@@ -115,6 +115,8 @@ export interface RawExcelRow {
   Nama?: string | null;
   Kamar?: string | null;
   Tahun?: string | null;
+  Limit_Kamar?: number | string | null;
+  Ada_Piket?: boolean | string | number | null;
   [key: string]: any;
 }
 
@@ -124,6 +126,8 @@ export interface ValidatedImportRow {
   nama: string;
   nama_kamar: string;
   tahun: string;
+  limit_kamar?: number;
+  ada_piket?: boolean;
   isValid: boolean;
   errors: string[];
   warnings: string[];
