@@ -122,6 +122,47 @@ export const DataService = {
     return { ...memorySettings, form_status: effectiveStatus };
   },
 
+  async uploadLogo(file: File): Promise<string> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const fileExt = file.name.split('.').pop() || 'png';
+        const fileName = `logo_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const filePath = `logos/${fileName}`;
+
+        let bucketName = 'logos';
+        let uploadRes = await supabase.storage.from(bucketName).upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+        if (uploadRes.error) {
+          bucketName = 'public';
+          uploadRes = await supabase.storage.from(bucketName).upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true,
+          });
+        }
+
+        if (!uploadRes.error) {
+          const { data } = supabase.storage.from(bucketName).getPublicUrl(filePath);
+          if (data?.publicUrl) {
+            return data.publicUrl;
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase storage upload fallback to base64 DataURL:', err);
+      }
+    }
+
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  },
+
   async updateSettings(settings: Partial<EventSettings>, actor = 'Admin'): Promise<EventSettings> {
     if (isSupabaseConfigured()) {
       try {
@@ -134,7 +175,14 @@ export const DataService = {
           .select()
           .single();
         if (!error && data) {
-          return { ...memorySettings, ...data };
+          memorySettings = { ...memorySettings, ...data };
+          return { ...memorySettings };
+        } else if (error && error.message.includes('logo_url')) {
+          const { logo_url, ...otherFields } = settings;
+          await supabase
+            .from('event_settings')
+            .update({ ...otherFields, updated_at: new Date().toISOString(), updated_by: actor })
+            .eq('id', current.id);
         }
       } catch (err) {
         console.warn('Supabase updateSettings fallback to local:', err);

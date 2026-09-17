@@ -19,6 +19,7 @@ import {
   Shield
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { DataService } from '@/lib/data-service';
 
 export interface AdminShellProps {
   children: React.ReactNode;
@@ -38,6 +39,13 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    DataService.getSettings().then((s) => {
+      if (s.logo_url) setLogoUrl(s.logo_url);
+    }).catch(() => {});
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -61,9 +69,17 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
       {/* Mobile Top Bar */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 text-white px-4 py-3 border-b border-slate-800 sticky top-0 z-40">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-800 text-white">
-            <Shield className="h-4 w-4" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Logo Panitia"
+              className="h-7 w-7 rounded object-contain bg-white p-0.5"
+            />
+          ) : (
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-800 text-white">
+              <Shield className="h-4 w-4" />
+            </div>
+          )}
           <span className="font-bold text-sm tracking-tight">MURAJA&apos;AH ADMIN</span>
         </div>
         <button
@@ -139,9 +155,17 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
       <aside className="hidden md:flex flex-col w-60 bg-slate-900 text-slate-200 border-r border-slate-800 shrink-0 sticky top-0 h-screen">
         {/* Brand */}
         <div className="p-5 border-b border-slate-800 flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-800 text-white shadow-xs">
-            <Shield className="h-4 w-4" />
-          </div>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt="Logo Panitia"
+              className="h-9 w-9 rounded-lg object-contain bg-white p-0.5 shrink-0 shadow-xs"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-slate-800 text-white shadow-xs shrink-0">
+              <Shield className="h-4 w-4" />
+            </div>
+          )}
           <div>
             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               PANEL ADMIN

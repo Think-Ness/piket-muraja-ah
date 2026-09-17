@@ -10,6 +10,7 @@ export interface EventSettings {
   committee_name: string;
   academic_year: string;
   form_status: FormStatus;
+  logo_url?: string | null;
   whatsapp_number?: string | null;
   whatsapp_label?: string | null;
   waktu_buka?: string | null;

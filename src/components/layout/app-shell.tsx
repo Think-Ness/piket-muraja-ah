@@ -19,9 +19,17 @@ export const AppShell: React.FC<AppShellProps> = ({ settings, children }) => {
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
           <Link href="/" className="group flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white shadow-xs group-hover:bg-slate-800 transition-colors">
-              <Shield className="h-4 w-4" />
-            </div>
+            {settings.logo_url ? (
+              <img
+                src={settings.logo_url}
+                alt={settings.committee_name || "Logo Panitia"}
+                className="h-10 w-10 rounded-lg object-contain bg-white border border-slate-200 p-0.5 shadow-xs shrink-0"
+              />
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white shadow-xs group-hover:bg-slate-800 transition-colors shrink-0">
+                <Shield className="h-4 w-4" />
+              </div>
+            )}
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 {settings.committee_name || "Panitia Ujian Muraja'ah Akhir Tahun"}
@@ -32,19 +40,10 @@ export const AppShell: React.FC<AppShellProps> = ({ settings, children }) => {
             </div>
           </Link>
 
-          {/* Right Header: Form Status & Admin Login link */}
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Status:</span>
-              <StatusBadge status={settings.form_status} size="sm" />
-            </div>
-            <Link
-              href="/admin/login"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-700 hover:text-slate-950 hover:bg-slate-100 border border-slate-200 transition-colors"
-            >
-              <Lock className="h-3 w-3" />
-              <span>Panel Admin</span>
-            </Link>
+          {/* Right Header: Form Status Badge */}
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline text-xs text-slate-500 font-medium">Status:</span>
+            <StatusBadge status={settings.form_status} size="sm" />
           </div>
         </div>
       </header>

@@ -28,6 +28,8 @@ export default function AdminSettingsPage() {
   const [committeeName, setCommitteeName] = useState('');
   const [academicYear, setAcademicYear] = useState('');
   const [formStatus, setFormStatus] = useState<FormStatus>('OPEN');
+  const [logoUrl, setLogoUrl] = useState<string>('');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
 
   // WhatsApp & CP Fields
   const [whatsappNumber, setWhatsappNumber] = useState('');
@@ -52,6 +54,7 @@ export default function AdminSettingsPage() {
       setCommitteeName(data.committee_name);
       setAcademicYear(data.academic_year);
       setFormStatus(data.form_status);
+      setLogoUrl(data.logo_url || '');
       setWhatsappNumber(data.whatsapp_number || '6281234567890');
       setWhatsappLabel(data.whatsapp_label || 'Hubungi Panitia Piket');
       setWaktuBuka(data.waktu_buka ? new Date(data.waktu_buka).toISOString().slice(0, 16) : '');
@@ -67,6 +70,37 @@ export default function AdminSettingsPage() {
     loadSettings();
   }, []);
 
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast('File yang diunggah harus berupa gambar (PNG/JPG/WEBP).', 'error');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Ukuran gambar maksimal 2 MB.', 'error');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const uploadedUrl = await DataService.uploadLogo(file);
+      setLogoUrl(uploadedUrl);
+      showToast('Logo berhasil diunggah. Klik "Simpan Semua Pengaturan" untuk menerapkan.', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengunggah logo.', 'error');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setLogoUrl('');
+    showToast('Logo dihapus. Klik "Simpan Semua Pengaturan" untuk menerapkan.', 'info');
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -78,6 +112,7 @@ export default function AdminSettingsPage() {
           committee_name: committeeName,
           academic_year: academicYear,
           form_status: formStatus,
+          logo_url: logoUrl || null,
           whatsapp_number: whatsappNumber,
           whatsapp_label: whatsappLabel,
           waktu_buka: waktuBuka ? new Date(waktuBuka).toISOString() : null,
@@ -86,7 +121,7 @@ export default function AdminSettingsPage() {
         'Admin'
       );
       setSettings(updated);
-      showToast('Konfigurasi sistem & jadwal berhasil disimpan.', 'success');
+      showToast('Konfigurasi sistem, logo & jadwal berhasil disimpan.', 'success');
     } catch (err: any) {
       showToast(err.message || 'Gagal menyimpan pengaturan.', 'error');
     } finally {
@@ -140,12 +175,70 @@ export default function AdminSettingsPage() {
           Pengaturan Sistem & Jadwal
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-          Atur informasi kegiatan, kontak WhatsApp panitia, jadwal buka/tutup form otomatis, dan keamanan akun.
+          Atur logo panitia, informasi kegiatan, kontak WhatsApp, jadwal buka/tutup form otomatis, dan keamanan akun.
         </p>
       </div>
 
       {/* Main Settings Form */}
       <form onSubmit={handleSaveSettings} className="space-y-6">
+        {/* Group 0: Logo Panitia */}
+        <div className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6 space-y-4 shadow-2xs">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+            <Shield className="h-4 w-4 text-slate-700" />
+            <h2 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">
+              Logo Panitia / Lembaga
+            </h2>
+          </div>
+
+          <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+            {/* Logo Preview */}
+            <div className="flex items-center justify-center h-20 w-20 rounded-xl border border-slate-200 bg-slate-50 p-1 shadow-2xs shrink-0 overflow-hidden">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Preview Logo Panitia"
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <div className="text-center text-slate-400">
+                  <Shield className="h-8 w-8 mx-auto stroke-1 text-slate-300" />
+                  <span className="text-[10px] block mt-0.5 font-medium">No Logo</span>
+                </div>
+              )}
+            </div>
+
+            {/* Upload Controls */}
+            <div className="space-y-2 flex-1 text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="cursor-pointer inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors shadow-2xs">
+                  <span>{isUploadingLogo ? 'Mengunggah...' : logoUrl ? 'Ganti Logo' : 'Upload Logo Panitia'}</span>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/webp, image/svg+xml"
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                    disabled={isUploadingLogo}
+                  />
+                </label>
+                {logoUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRemoveLogo}
+                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 text-xs h-7"
+                  >
+                    Hapus Logo
+                  </Button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Format yang didukung: PNG, JPG, WEBP, SVG (Maks. 2 MB). Logo ini akan ditampilkan di header formulir publik dan panel admin.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Group 1: Informasi Kegiatan */}
         <div className="rounded-lg border border-slate-200 bg-white p-5 sm:p-6 space-y-4 shadow-2xs">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
