@@ -99,7 +99,12 @@ export default function DetailKamarPage({ params }: { params: Promise<{ id: stri
     setErrorMessage(null);
 
     // Generate client_request_id for idempotency
-    const clientRequestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    const clientRequestId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+        });
 
     try {
       const result = await DataService.submitPiket({

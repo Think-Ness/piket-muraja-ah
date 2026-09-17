@@ -62,6 +62,21 @@ export function isJunkCategory(name: string): boolean {
   );
 }
 
+function ensureValidUUID(id?: string): string {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (id && uuidRegex.test(id)) {
+    return id;
+  }
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   return Boolean(url && !url.includes('placeholder.supabase.co') && !url.includes('sample-project') && !url.includes('your-project'));
@@ -524,6 +539,8 @@ export const DataService = {
 
   // 3. Submit Piket (Atomic Submission, Revision Tracking & Idempotency)
   async submitPiket(payload: SubmitPiketPayload): Promise<SubmitPiketResult> {
+    const validUUID = ensureValidUUID(payload.client_request_id);
+
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
@@ -531,7 +548,7 @@ export const DataService = {
           p_kamar_id: payload.kamar_id,
           p_guru_ids: payload.guru_ids,
           p_submitted_by: payload.submitted_by || 'Petugas Kamar',
-          p_client_request_id: payload.client_request_id,
+          p_client_request_id: validUUID,
         });
 
         if (rpcErr) {
