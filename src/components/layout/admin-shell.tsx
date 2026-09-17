@@ -64,7 +64,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
           <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-800 text-white">
             <Shield className="h-4 w-4" />
           </div>
-          <span className="font-bold text-sm tracking-tight">MURAJA'AH ADMIN</span>
+          <span className="font-bold text-sm tracking-tight">MURAJA&apos;AH ADMIN</span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -147,7 +147,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
               PANEL ADMIN
             </div>
             <div className="text-sm font-bold text-white tracking-tight">
-              MURAJA'AH 1447
+              MURAJA&apos;AH 1447
             </div>
           </div>
         </div>

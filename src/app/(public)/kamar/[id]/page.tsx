@@ -60,6 +60,7 @@ export default function DetailKamarPage({ params }: { params: Promise<{ id: stri
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resolvedParams.id]);
 
   const filteredGurus = useMemo(() => {
@@ -296,7 +297,7 @@ export default function DetailKamarPage({ params }: { params: Promise<{ id: stri
           })
         ) : (
           <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
-            Tidak ada guru yang sesuai dengan pencarian "{search}".
+            Tidak ada guru yang sesuai dengan pencarian &quot;{search}&quot;.
           </div>
         )}
       </div>

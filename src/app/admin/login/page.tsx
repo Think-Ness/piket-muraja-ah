@@ -66,7 +66,7 @@ export default function AdminLoginPage() {
               Panel Administrator
             </div>
             <h1 className="text-base font-bold text-slate-900 tracking-tight">
-              Ujian Muraja'ah
+              Ujian Muraja&apos;ah
             </h1>
           </div>
         </div>
