@@ -1,91 +1,55 @@
-import { 
-  EventSettings, 
-  Kamar, 
-  Guru, 
-  KamarOverview, 
-  PiketSubmission, 
-  AuditLog, 
-  ImportBatch, 
-  SubmitPiketPayload, 
+import {
+  EventSettings,
+  Kamar,
+  Guru,
+  PiketSubmission,
+  AuditLog,
+  ImportBatch,
+  KamarOverview,
+  SubmitPiketPayload,
   SubmitPiketResult,
-  ValidatedImportRow
+  ValidatedImportRow,
 } from '@/types';
-import { createClient } from '@/lib/supabase/client';
+import { createClient } from './supabase/client';
 
-// Initial in-memory database state matching seed.sql (clean master rooms)
+// Initial In-Memory Seed Data (Fallback if Supabase is not reachable)
 let memorySettings: EventSettings = {
-  id: 'e0000000-0000-0000-0000-000000000001',
+  id: '30f65553-f4c7-4281-b2d0-94a5c4a6c7d8',
   event_name: "Ujian Muraja'ah Akhir Tahun",
-  event_subtitle: "Penentuan Piket Kamar Guru",
+  event_subtitle: 'Penentuan Piket Kamar Guru',
   committee_name: "Panitia Ujian Muraja'ah Akhir Tahun",
-  academic_year: "1447–1448 H",
+  academic_year: '1447–1448 H',
   form_status: 'OPEN',
-  whatsapp_number: '6281234567890',
-  whatsapp_label: 'Hubungi Panitia Piket',
   waktu_buka: null,
-  waktu_tutup: null,
+  whatsapp_number: '6281234567890',
+  whatsapp_label: 'Bantuan Panitia',
   updated_at: new Date().toISOString(),
-  updated_by: 'System'
+  updated_by: 'System',
 };
 
-// Rooms list: Exclude junk/alumni/non-piket categories
 let memoryKamar: Kamar[] = [
-  { id: 'k01', nama_kamar: 'Gontor', limit_piket: 2, ada_piket: true, aktif: true, urutan: 1, created_at: new Date().toISOString() },
-  { id: 'k02', nama_kamar: 'Gandy', limit_piket: 1, ada_piket: true, aktif: true, urutan: 2, created_at: new Date().toISOString() },
-  { id: 'k03', nama_kamar: 'Perdos Saudi', limit_piket: 2, ada_piket: true, aktif: true, urutan: 3, created_at: new Date().toISOString() },
-  { id: 'k04', nama_kamar: 'Perdos UNIDA Siman', limit_piket: 3, ada_piket: true, aktif: true, urutan: 4, created_at: new Date().toISOString() },
-  { id: 'k05', nama_kamar: 'Wisma Darussalam', limit_piket: 2, ada_piket: true, aktif: true, urutan: 5, created_at: new Date().toISOString() },
-  { id: 'k06', nama_kamar: 'Aligarh', limit_piket: 1, ada_piket: true, aktif: true, urutan: 6, created_at: new Date().toISOString() },
-  { id: 'k07', nama_kamar: 'Syam', limit_piket: 2, ada_piket: true, aktif: true, urutan: 7, created_at: new Date().toISOString() },
-  { id: 'k08', nama_kamar: 'Makkah', limit_piket: 2, ada_piket: true, aktif: true, urutan: 8, created_at: new Date().toISOString() },
-  { id: 'k09', nama_kamar: 'Madinah', limit_piket: 2, ada_piket: true, aktif: true, urutan: 9, created_at: new Date().toISOString() },
-  { id: 'k10', nama_kamar: 'Kulliyatu-l-Banat', limit_piket: 3, ada_piket: false, aktif: true, urutan: 10, created_at: new Date().toISOString() },
-  { id: 'k11', nama_kamar: 'Santiniketan', limit_piket: 1, ada_piket: true, aktif: true, urutan: 11, created_at: new Date().toISOString() },
-  { id: 'k12', nama_kamar: 'Al-Azhar', limit_piket: 2, ada_piket: true, aktif: true, urutan: 12, created_at: new Date().toISOString() },
-  { id: 'k13', nama_kamar: 'Qordova', limit_piket: 2, ada_piket: true, aktif: true, urutan: 13, created_at: new Date().toISOString() }
+  { id: '782d7de4-593a-4850-8ffc-03a789bc78ce', nama_kamar: 'Gontor', limit_piket: 2, ada_piket: true, aktif: true, urutan: 1, created_at: new Date().toISOString() },
+  { id: '629e60d6-866f-45cb-b8d7-d49b2f83efb3', nama_kamar: 'Gandy', limit_piket: 1, ada_piket: true, aktif: true, urutan: 2, created_at: new Date().toISOString() },
+  { id: '5edcc4d0-801c-433a-8c89-b9c8fe677ade', nama_kamar: 'Perdos Saudi', limit_piket: 2, ada_piket: true, aktif: true, urutan: 3, created_at: new Date().toISOString() },
+  { id: '4faac5fd-761b-4865-9148-e518e06445ad', nama_kamar: 'Perdos UNIDA Siman', limit_piket: 3, ada_piket: true, aktif: true, urutan: 4, created_at: new Date().toISOString() },
+  { id: '99ed1fe5-e378-4d22-a9b4-632712e60eb1', nama_kamar: 'Wisma Darussalam', limit_piket: 2, ada_piket: true, aktif: true, urutan: 5, created_at: new Date().toISOString() },
+  { id: '3448b111-9fa7-4fec-88c9-598d9753907e', nama_kamar: 'Santorini', limit_piket: 2, ada_piket: true, aktif: true, urutan: 6, created_at: new Date().toISOString() },
+  { id: '097980ff-27c9-4670-8b01-512c10b7a86f', nama_kamar: 'Kukusan', limit_piket: 2, ada_piket: true, aktif: true, urutan: 7, created_at: new Date().toISOString() },
 ];
 
 let memoryGuru: Guru[] = [
-  // Gontor
-  { id: 'g01', rnk: 1, nama: 'K.H. Hasan Abdullah Sahal', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g02', rnk: 2, nama: 'Drs. K.H. M. Akrim Mariyat, Dipl.A.Ed.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g03', rnk: 3, nama: 'Prof. Dr. K.H. Amal Fathullah Zarkasyi, M.A.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g04', rnk: 4, nama: 'H. Imam Shobari, S.Ag.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g05', rnk: 5, nama: "H. M. Syuja'i, S.Ag.", kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g06', rnk: 6, nama: 'Ust. H. Nur Hadi, M.Pd.I.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g07', rnk: 7, nama: 'Ust. H. Riza Ashari, M.Pd.I.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  { id: 'g08', rnk: 8, nama: 'Ust. H. Ahmad Saefullah, M.Pd.I.', kamar_id: 'k01', tahun: '1447-1448', aktif: true },
-  // Gandy
-  { id: 'g09', rnk: 9, nama: 'Ust. Dr. H. Setiawan Bin Lahuri, M.A.', kamar_id: 'k02', tahun: '1447-1448', aktif: true },
-  { id: 'g10', rnk: 10, nama: 'Ust. H. Fairuz Subakir Ahmad, M.A.', kamar_id: 'k02', tahun: '1447-1448', aktif: true },
-  { id: 'g11', rnk: 11, nama: 'Ust. H. Mohammad Adnan Haris, M.Pd.I.', kamar_id: 'k02', tahun: '1447-1448', aktif: true },
-  { id: 'g12', rnk: 12, nama: 'Ust. H. Daniar, M.A.', kamar_id: 'k02', tahun: '1447-1448', aktif: true },
-  // Perdos Saudi
-  { id: 'g13', rnk: 13, nama: 'Ust. H. Suwarno, M.Pd.I.', kamar_id: 'k03', tahun: '1447-1448', aktif: true },
-  { id: 'g14', rnk: 14, nama: 'Ust. H. M. Taufiq Affandi, M.Sc.', kamar_id: 'k03', tahun: '1447-1448', aktif: true },
-  { id: 'g15', rnk: 15, nama: 'Ust. H. Hasib Amrullah, M.A.', kamar_id: 'k03', tahun: '1447-1448', aktif: true },
-  // Perdos UNIDA
-  { id: 'g16', rnk: 16, nama: 'Ust. Dr. H. Abdul Hafidz Zaid, M.A.', kamar_id: 'k04', tahun: '1447-1448', aktif: true },
-  { id: 'g17', rnk: 17, nama: 'Ust. Dr. H. Khoirul Umam, M.Ec.', kamar_id: 'k04', tahun: '1447-1448', aktif: true },
-  { id: 'g18', rnk: 18, nama: 'Ust. Dr. Cecep Sobar Rochmat, M.Pd.I.', kamar_id: 'k04', tahun: '1447-1448', aktif: true },
-  { id: 'g19', rnk: 19, nama: 'Ust. Dr. H. Jarman Arroisi, M.A.', kamar_id: 'k04', tahun: '1447-1448', aktif: true },
+  { id: 'd753c14a-bb11-406a-a808-9b1e3ee17fad', rnk: 1, nama: 'K.H. Hasan Abdullah Sahal', kamar_id: '782d7de4-593a-4850-8ffc-03a789bc78ce', tahun: '1447-1448', aktif: true, created_at: new Date().toISOString() },
+  { id: 'f27e5720-d4eb-48f1-8cb4-e3adab6f195d', rnk: 2, nama: 'Prof. Dr. K.H. Amal Fathullah Zarkasyi, M.A.', kamar_id: '782d7de4-593a-4850-8ffc-03a789bc78ce', tahun: '1447-1448', aktif: true, created_at: new Date().toISOString() },
+  { id: '7921a8d0-ae05-4c07-b25a-4b07f8fe301c', rnk: 3, nama: 'K.H. Akrim Mariyat, Dipl.A.Ed.', kamar_id: '782d7de4-593a-4850-8ffc-03a789bc78ce', tahun: '1447-1448', aktif: true, created_at: new Date().toISOString() },
+  { id: '7aa6086a-7bb1-4ba2-8ef9-0414902eb142', rnk: 1, nama: 'Ustadz Ahmad Fathoni, M.Pd.', kamar_id: '629e60d6-866f-45cb-b8d7-d49b2f83efb3', tahun: '1447-1448', aktif: true, created_at: new Date().toISOString() },
+  { id: '2863e41c-32b0-4ecb-99f5-7e50882e564c', rnk: 2, nama: 'Ustadz Budi Santoso, Lc.', kamar_id: '629e60d6-866f-45cb-b8d7-d49b2f83efb3', tahun: '1447-1448', aktif: true, created_at: new Date().toISOString() },
 ];
 
 let memorySubmissions: PiketSubmission[] = [];
-let memoryAuditLogs: AuditLog[] = [
-  {
-    id: 'a01',
-    actor_id: 'System',
-    action: 'INIT_SYSTEM',
-    entity_type: 'system',
-    entity_id: 'system',
-    new_data: { note: 'Inisialisasi sistem piket murajaah' },
-    created_at: new Date(Date.now() - 3600000).toISOString()
-  }
-];
+let memoryAuditLogs: AuditLog[] = [];
 let memoryImportBatches: ImportBatch[] = [];
 
-// Helper to filter out junk / non-piket categories automatically
+// Helper to filter junk categories (alumni, sampah, ampash, etc.)
 export function isJunkCategory(name: string): boolean {
   if (!name) return false;
   const n = name.trim().toLowerCase();
@@ -100,7 +64,7 @@ export function isJunkCategory(name: string): boolean {
 
 function isSupabaseConfigured(): boolean {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return Boolean(url && !url.includes('sample-project') && !url.includes('your-project'));
+  return Boolean(url && !url.includes('placeholder.supabase.co') && !url.includes('sample-project') && !url.includes('your-project'));
 }
 
 export const DataService = {
@@ -119,7 +83,11 @@ export const DataService = {
           if (data.waktu_tutup && new Date(data.waktu_tutup) < now) {
             effectiveStatus = 'CLOSED';
           }
-          return { ...data, form_status: effectiveStatus };
+          return {
+            ...memorySettings,
+            ...data,
+            form_status: effectiveStatus,
+          };
         }
       } catch (err) {
         console.warn('Supabase getSettings fallback to local:', err);
@@ -142,13 +110,16 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
+        const current = await this.getSettings();
         const { data, error } = await supabase
           .from('event_settings')
           .update({ ...settings, updated_at: new Date().toISOString(), updated_by: actor })
-          .eq('id', memorySettings.id)
+          .eq('id', current.id)
           .select()
           .single();
-        if (!error && data) return data;
+        if (!error && data) {
+          return { ...memorySettings, ...data };
+        }
       } catch (err) {
         console.warn('Supabase updateSettings fallback to local:', err);
       }
@@ -159,7 +130,7 @@ export const DataService = {
       ...memorySettings,
       ...settings,
       updated_at: new Date().toISOString(),
-      updated_by: actor
+      updated_by: actor,
     };
 
     memoryAuditLogs.unshift({
@@ -170,7 +141,7 @@ export const DataService = {
       entity_id: memorySettings.id,
       old_data: oldData,
       new_data: memorySettings,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     });
 
     return { ...memorySettings };
@@ -178,6 +149,81 @@ export const DataService = {
 
   // 2. Kamar & Overview
   async getKamarOverviewList(options?: { onlyPiket?: boolean }): Promise<KamarOverview[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const [settingsRes, kamarRes, guruRes, subRes] = await Promise.all([
+          supabase.from('event_settings').select('*').limit(1).single(),
+          supabase.from('kamar').select('*').order('urutan'),
+          supabase.from('guru').select('*').eq('aktif', true),
+          supabase.from('piket_submissions').select('*, piket_submission_members(*, guru(*))').order('submitted_at', { ascending: true }),
+        ]);
+
+        if (!kamarRes.error && kamarRes.data && kamarRes.data.length > 0) {
+          const settings = settingsRes.data || memorySettings;
+          let rooms = kamarRes.data;
+          if (options?.onlyPiket) {
+            rooms = rooms.filter((k) => (k.ada_piket ?? true) && k.aktif && !isJunkCategory(k.nama_kamar));
+          }
+          const allGurus = guruRes.data || [];
+          const allSubs = subRes.data || [];
+
+          return rooms.map((k) => {
+            const kamarGurus = allGurus.filter((g) => g.kamar_id === k.id && !isJunkCategory(g.nama));
+            const kamarSubs = allSubs.filter((s) => s.kamar_id === k.id);
+            const activeSub = kamarSubs.find((s) => s.status === 'SUCCESS');
+            const activeMembers = activeSub?.piket_submission_members || [];
+            const totalPiket = activeMembers.length;
+
+            const firstSub = kamarSubs[0];
+            const latestSub = kamarSubs[kamarSubs.length - 1];
+
+            const initialGuruNames = firstSub ? (firstSub.piket_submission_members || []).map((m: any) => m.guru?.nama || 'Guru') : [];
+            const latestGuruNames = latestSub ? (latestSub.piket_submission_members || []).map((m: any) => m.guru?.nama || 'Guru') : [];
+
+            const limitPiket = k.limit_piket ?? 1;
+            const adaPiket = k.ada_piket ?? true;
+
+            let status_penetapan: KamarOverview['status_penetapan'] = 'Belum ditetapkan';
+            if (!k.aktif) {
+              status_penetapan = 'Nonaktif';
+            } else if (!adaPiket) {
+              status_penetapan = 'Non-Piket';
+            } else if (settings.form_status === 'CLOSED') {
+              status_penetapan = totalPiket >= limitPiket && limitPiket > 0 ? 'Terpenuhi' : (totalPiket > 0 ? 'Sebagian' : 'Form ditutup');
+            } else if (totalPiket >= limitPiket && limitPiket > 0) {
+              status_penetapan = 'Terpenuhi';
+            } else if (totalPiket > 0) {
+              status_penetapan = 'Sebagian';
+            } else {
+              status_penetapan = 'Belum ditetapkan';
+            }
+
+            return {
+              id: k.id,
+              nama_kamar: k.nama_kamar,
+              limit_piket: limitPiket,
+              ada_piket: adaPiket,
+              aktif: k.aktif,
+              urutan: k.urutan || 0,
+              updated_at: k.updated_at || k.created_at,
+              total_guru: kamarGurus.length,
+              total_piket_terpilih: totalPiket,
+              status_penetapan,
+              has_revisions: kamarSubs.length > 1,
+              revision_count: Math.max(0, kamarSubs.length - 1),
+              initial_submitted_at: firstSub?.submitted_at || null,
+              initial_guru_names: initialGuruNames,
+              latest_submitted_at: latestSub?.submitted_at || null,
+              latest_guru_names: latestGuruNames,
+            };
+          });
+        }
+      } catch (err) {
+        console.warn('Supabase getKamarOverviewList error, falling back:', err);
+      }
+    }
+
     const settings = await this.getSettings();
     let rooms = memoryKamar;
     if (options?.onlyPiket) {
@@ -242,6 +288,26 @@ export const DataService = {
   },
 
   async getPiketActiveRooms(): Promise<Kamar[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('kamar')
+          .select('*')
+          .eq('aktif', true)
+          .order('urutan');
+        if (!error && data && data.length > 0) {
+          return data
+            .filter((k) => (k.ada_piket ?? true) && !isJunkCategory(k.nama_kamar))
+            .map((k) => ({
+              ...k,
+              ada_piket: k.ada_piket ?? true,
+            }));
+        }
+      } catch (err) {
+        console.warn('Supabase getPiketActiveRooms fallback:', err);
+      }
+    }
     return memoryKamar.filter((k) => k.ada_piket && k.aktif && !isJunkCategory(k.nama_kamar));
   },
 
@@ -252,6 +318,56 @@ export const DataService = {
     currentSelectedGuruIds: string[];
     isPreviousSubmission: boolean;
   } | null> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: kamar, error: kErr } = await supabase.from('kamar').select('*').eq('id', id).single();
+        if (!kErr && kamar) {
+          const { data: gurusRaw } = await supabase.from('guru').select('*').eq('kamar_id', id).eq('aktif', true).order('rnk');
+          const { data: activeSubs } = await supabase.from('piket_submissions')
+            .select('*, piket_submission_members(*)')
+            .eq('kamar_id', id)
+            .eq('status', 'SUCCESS')
+            .order('submitted_at', { ascending: false });
+
+          const activeSub = activeSubs?.[0];
+          const currentSelectedGuruIds = (activeSub?.piket_submission_members || []).map((m: any) => m.guru_id);
+
+          const { data: otherSubs } = await supabase.from('piket_submissions')
+            .select('piket_submission_members(guru_id)')
+            .neq('kamar_id', id)
+            .eq('status', 'SUCCESS');
+          
+          const otherAssignedIds = new Set(
+            (otherSubs || []).flatMap((s: any) => (s.piket_submission_members || []).map((m: any) => m.guru_id))
+          );
+
+          const fullKamar: Kamar = {
+            ...kamar,
+            ada_piket: kamar.ada_piket ?? true,
+          };
+
+          const gurus: Guru[] = (gurusRaw || [])
+            .filter((g) => !isJunkCategory(g.nama))
+            .map((g) => ({
+              ...g,
+              kamar: fullKamar,
+              is_piket_active: otherAssignedIds.has(g.id),
+            }));
+
+          return {
+            kamar: fullKamar,
+            gurus,
+            activePiketCount: currentSelectedGuruIds.length,
+            currentSelectedGuruIds,
+            isPreviousSubmission: Boolean(activeSub),
+          };
+        }
+      } catch (err) {
+        console.warn('Supabase getKamarDetail fallback:', err);
+      }
+    }
+
     const kamar = memoryKamar.find((k) => k.id === id);
     if (!kamar) return null;
 
@@ -282,6 +398,23 @@ export const DataService = {
   },
 
   async updateKamarLimit(kamarId: string, newLimit: number, actor = 'Admin'): Promise<Kamar> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('kamar')
+          .update({ limit_piket: Math.max(0, newLimit), updated_at: new Date().toISOString() })
+          .eq('id', kamarId)
+          .select()
+          .single();
+        if (!error && data) {
+          return { ...data, ada_piket: data.ada_piket ?? true };
+        }
+      } catch (err) {
+        console.warn('Supabase updateKamarLimit fallback:', err);
+      }
+    }
+
     const kamar = memoryKamar.find((k) => k.id === kamarId);
     if (!kamar) throw new Error('Kamar tidak ditemukan.');
 
@@ -304,6 +437,23 @@ export const DataService = {
   },
 
   async toggleKamarAdaPiket(kamarId: string, adaPiket: boolean, actor = 'Admin'): Promise<Kamar> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('kamar')
+          .update({ ada_piket: adaPiket, updated_at: new Date().toISOString() })
+          .eq('id', kamarId)
+          .select()
+          .single();
+        if (!error && data) {
+          return { ...data, ada_piket: data.ada_piket ?? true };
+        }
+      } catch (err) {
+        console.warn('Supabase toggleKamarAdaPiket fallback:', err);
+      }
+    }
+
     const kamar = memoryKamar.find((k) => k.id === kamarId);
     if (!kamar) throw new Error('Kamar tidak ditemukan.');
 
@@ -326,6 +476,24 @@ export const DataService = {
   },
 
   async resetKamarPiket(kamarId: string, actor = 'Admin'): Promise<{ success: boolean; message: string }> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('piket_submissions')
+          .update({ status: 'CANCELLED' })
+          .eq('kamar_id', kamarId)
+          .eq('status', 'SUCCESS');
+        
+        return {
+          success: true,
+          message: `Penetapan piket kamar berhasil dibatalkan di database.`,
+        };
+      } catch (err) {
+        console.warn('Supabase resetKamarPiket fallback:', err);
+      }
+    }
+
     const kamar = memoryKamar.find((k) => k.id === kamarId);
     if (!kamar) throw new Error('Kamar tidak ditemukan.');
 
@@ -356,6 +524,39 @@ export const DataService = {
 
   // 3. Submit Piket (Atomic Submission, Revision Tracking & Idempotency)
   async submitPiket(payload: SubmitPiketPayload): Promise<SubmitPiketResult> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_piket', {
+          p_kamar_id: payload.kamar_id,
+          p_guru_ids: payload.guru_ids,
+          p_submitted_by: payload.submitted_by || 'Petugas Kamar',
+          p_client_request_id: payload.client_request_id,
+        });
+
+        if (rpcErr) {
+          console.error('Supabase submit_piket RPC error:', rpcErr);
+          throw new Error(rpcErr.message || 'Gagal menyimpan ke database Supabase.');
+        }
+
+        if (rpcRes) {
+          return {
+            success: Boolean(rpcRes.success),
+            idempotent: Boolean(rpcRes.idempotent),
+            submission_id: rpcRes.submission_id,
+            is_revision: Boolean(rpcRes.is_revision),
+            message: rpcRes.message || 'Penetapan piket berhasil disimpan.',
+          };
+        }
+      } catch (err: any) {
+        // If error was thrown explicitly from RPC constraint, rethrow so UI displays user friendly reason
+        if (err.message && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
+          throw err;
+        }
+        console.warn('Supabase submitPiket RPC unavailable, falling back to local:', err);
+      }
+    }
+
     const existing = memorySubmissions.find(
       (s) => s.client_request_id === payload.client_request_id && s.status === 'SUCCESS'
     );
@@ -484,6 +685,37 @@ export const DataService = {
     gurus: Guru[];
     total: number;
   }> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        let query = supabase.from('guru').select('*, kamar(*)', { count: 'exact' }).eq('aktif', true);
+
+        if (params?.kamarId && params.kamarId !== 'ALL') {
+          query = query.eq('kamar_id', params.kamarId);
+        }
+
+        if (params?.search) {
+          query = query.ilike('nama', `%${params.search}%`);
+        }
+
+        const page = params?.page || 1;
+        const limit = params?.limit || 50;
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        const { data, count, error } = await query.order('rnk', { ascending: true }).range(from, to);
+        if (!error && data) {
+          const cleaned = data.filter((g) => !isJunkCategory(g.nama)).map((g) => ({
+            ...g,
+            kamar: g.kamar ? { ...g.kamar, ada_piket: g.kamar.ada_piket ?? true } : undefined,
+          }));
+          return { gurus: cleaned, total: count || cleaned.length };
+        }
+      } catch (err) {
+        console.warn('Supabase getGuruList fallback:', err);
+      }
+    }
+
     let list = [...memoryGuru].filter((g) => !isJunkCategory(g.nama));
 
     if (params?.kamarId && params.kamarId !== 'ALL') {
@@ -509,6 +741,41 @@ export const DataService = {
 
   // 5. Histori Piket & Submissions
   async getPiketSubmissions(): Promise<PiketSubmission[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('piket_submissions')
+          .select('*, kamar(*), piket_submission_members(*, guru(*))')
+          .order('submitted_at', { ascending: false });
+        
+        if (!error && data && data.length > 0) {
+          return data.map((s) => ({
+            id: s.id,
+            kamar_id: s.kamar_id,
+            submitted_by: s.submitted_by,
+            submitted_at: s.submitted_at,
+            status: s.status,
+            client_request_id: s.client_request_id,
+            notes: s.notes,
+            version: 1,
+            is_revision: false,
+            replaced_submission_id: null,
+            kamar: s.kamar ? { ...s.kamar, ada_piket: s.kamar.ada_piket ?? true } : undefined,
+            members: (s.piket_submission_members || []).map((m: any) => ({
+              id: m.id,
+              submission_id: s.id,
+              guru_id: m.guru_id,
+              created_at: m.created_at,
+              guru: m.guru,
+            })),
+          }));
+        }
+      } catch (err) {
+        console.warn('Supabase getPiketSubmissions fallback:', err);
+      }
+    }
+
     return memorySubmissions.map((s) => ({
       ...s,
       kamar: memoryKamar.find((k) => k.id === s.kamar_id),
@@ -532,6 +799,83 @@ export const DataService = {
     const cleanedRows = validRows.filter(
       (r) => !isJunkCategory(r.nama) && !isJunkCategory(r.nama_kamar)
     );
+
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        // 1. Get or create kamar in Supabase
+        const { data: existingKamar } = await supabase.from('kamar').select('*');
+        const roomMap = new Map<string, string>();
+        (existingKamar || []).forEach((k) => roomMap.set(k.nama_kamar.toLowerCase(), k.id));
+
+        for (const r of cleanedRows) {
+          const key = r.nama_kamar.toLowerCase();
+          if (!roomMap.has(key)) {
+            const { data: newK } = await supabase
+              .from('kamar')
+              .insert({
+                nama_kamar: r.nama_kamar,
+                limit_piket: 2,
+                ada_piket: true,
+                aktif: true,
+                urutan: (roomMap.size + 1),
+              })
+              .select()
+              .single();
+            if (newK) {
+              roomMap.set(key, newK.id);
+            }
+          }
+        }
+
+        // 2. Insert batch record
+        const { data: batchData } = await supabase
+          .from('import_batches')
+          .insert({
+            file_name: fileName,
+            total_rows: cleanedRows.length,
+            valid_rows: cleanedRows.length,
+            invalid_rows: validRows.length - cleanedRows.length,
+            status: 'IMPORTED',
+            imported_by: actor,
+          })
+          .select()
+          .single();
+
+        const activeBatchId = batchData?.id || batchId;
+
+        // 3. Upsert Gurus
+        for (const r of cleanedRows) {
+          const kamarId = roomMap.get(r.nama_kamar.toLowerCase());
+          if (kamarId) {
+            await supabase.from('guru').upsert(
+              {
+                rnk: r.rnk || 1,
+                nama: r.nama,
+                kamar_id: kamarId,
+                tahun: r.tahun,
+                aktif: true,
+                source_import_batch_id: activeBatchId,
+              },
+              { onConflict: 'nama,kamar_id' }
+            );
+          }
+        }
+
+        return {
+          id: activeBatchId,
+          file_name: fileName,
+          total_rows: cleanedRows.length,
+          valid_rows: cleanedRows.length,
+          invalid_rows: validRows.length - cleanedRows.length,
+          status: 'IMPORTED',
+          imported_by: actor,
+          created_at: new Date().toISOString(),
+        };
+      } catch (err) {
+        console.warn('Supabase executeImport fallback:', err);
+      }
+    }
 
     const roomMap = new Map<string, string>();
     for (const r of cleanedRows) {
@@ -619,10 +963,39 @@ export const DataService = {
   },
 
   async getAuditLogs(limit = 100): Promise<AuditLog[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (!error && data && data.length > 0) {
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getAuditLogs fallback:', err);
+      }
+    }
     return memoryAuditLogs.slice(0, limit);
   },
 
   async getImportBatches(): Promise<ImportBatch[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from('import_batches')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!error && data && data.length > 0) {
+          return data;
+        }
+      } catch (err) {
+        console.warn('Supabase getImportBatches fallback:', err);
+      }
+    }
     return memoryImportBatches;
-  }
+  },
 };
