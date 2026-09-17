@@ -158,9 +158,10 @@ export default function AdminKamarPage() {
 
   const handleConfirmReset = async () => {
     if (!resettingKamar) return;
+    const input = typedConfirmation.trim().toUpperCase();
     const requiredText = resettingKamar.nama_kamar.toUpperCase();
-    if (typedConfirmation.trim().toUpperCase() !== requiredText) {
-      showToast(`Ketik "${requiredText}" dengan tepat untuk konfirmasi.`, 'error');
+    if (input !== '121212' && input !== requiredText) {
+      showToast(`Masukkan PIN 121212 atau ketik "${requiredText}" untuk konfirmasi.`, 'error');
       return;
     }
 
@@ -600,11 +601,11 @@ export default function AdminKamarPage() {
 
             <div className="space-y-1.5">
               <label className="font-semibold text-slate-700 block">
-                Ketik nama kamar <span className="font-bold text-slate-900">&quot;{resettingKamar.nama_kamar.toUpperCase()}&quot;</span> untuk melanjutkan:
+                Masukkan PIN keamanan <span className="font-bold text-slate-900">&quot;121212&quot;</span> atau nama kamar untuk melanjutkan:
               </label>
               <Input
                 type="text"
-                placeholder={resettingKamar.nama_kamar.toUpperCase()}
+                placeholder="121212"
                 value={typedConfirmation}
                 onChange={(e) => setTypedConfirmation(e.target.value)}
                 autoFocus
@@ -626,7 +627,8 @@ export default function AdminKamarPage() {
                 onClick={handleConfirmReset}
                 disabled={
                   isResetting ||
-                  typedConfirmation.trim().toUpperCase() !== resettingKamar.nama_kamar.toUpperCase()
+                  (typedConfirmation.trim().toUpperCase() !== '121212' &&
+                    typedConfirmation.trim().toUpperCase() !== resettingKamar.nama_kamar.toUpperCase())
                 }
               >
                 {isResetting ? 'Mereset...' : 'Ya, Reset Kamar'}

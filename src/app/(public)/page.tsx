@@ -6,6 +6,8 @@ import { DataService } from '@/lib/data-service';
 import { parseUserFriendlyError } from '@/lib/errors';
 import { GuruRow } from '@/components/kamar/guru-row';
 import { Button } from '@/components/ui/button';
+import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { 
   Search, 
@@ -18,7 +20,9 @@ import {
   AlertTriangle,
   RotateCcw,
   Check,
-  ChevronRight
+  ChevronRight,
+  KeyRound,
+  Trash2
 } from 'lucide-react';
 
 type WizardStep = 1 | 2 | 3;
@@ -50,6 +54,11 @@ export default function PublicFormWizardPage() {
   const [submittedCount, setSubmittedCount] = useState(0);
   const [isRevisionSubmission, setIsRevisionSubmission] = useState(false);
 
+  // PIN Reset Modal State
+  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [isResettingWithPin, setIsResettingWithPin] = useState(false);
+
   // Initial load
   useEffect(() => {
     const init = async () => {
@@ -70,8 +79,8 @@ export default function PublicFormWizardPage() {
     init();
   }, []);
 
-  // Filtered rooms based on user search query in Step 1
-  const matchingRooms = useMemo(() => {
+  // Filtered rooms for Step 1 search
+  const filteredRooms = useMemo(() => {
     if (!searchQuery.trim()) return piketRooms;
     const q = searchQuery.toLowerCase();
     return piketRooms.filter((r) => r.nama_kamar.toLowerCase().includes(q));
@@ -161,6 +170,28 @@ export default function PublicFormWizardPage() {
       showToast(userFriendly, 'error');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmPinReset = async () => {
+    if (!currentRoom) return;
+    if (pinInput.trim() !== '121212') {
+      showToast('PIN keamanan salah. Masukkan PIN 121212.', 'error');
+      return;
+    }
+
+    setIsResettingWithPin(true);
+    try {
+      await DataService.resetKamarPiket(currentRoom.id, 'Public User via PIN 121212');
+      setSelectedGuruIds([]);
+      setIsPreviousSubmission(false);
+      setIsPinModalOpen(false);
+      setPinInput('');
+      showToast(`Penetapan kamar ${currentRoom.nama_kamar} berhasil direset (dikosongkan).`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mereset penetapan kamar.', 'error');
+    } finally {
+      setIsResettingWithPin(false);
     }
   };
 
@@ -260,7 +291,7 @@ export default function PublicFormWizardPage() {
               2
             </span>
             <span className={`font-semibold hidden sm:inline ${currentStep === 2 ? 'text-slate-900' : 'text-slate-500'}`}>
-              Pilih Anggota
+              Pilih Anggota Piket
             </span>
           </div>
 
@@ -282,92 +313,65 @@ export default function PublicFormWizardPage() {
         </div>
       </div>
 
-      {/* Error Alert */}
+      {/* Error Alert Box */}
       {errorMessage && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 flex items-start gap-3 text-xs text-red-800">
-          <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-          <div className="leading-relaxed">
-            <p className="font-semibold">Perhatian</p>
-            <p className="mt-0.5 text-red-700">{errorMessage}</p>
+        <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-xs text-red-800 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block">Perhatian</span>
+            <p className="leading-relaxed">{errorMessage}</p>
           </div>
         </div>
       )}
 
-      {/* STEP 1: CARI & PILIH KAMAR (CLEAN SEARCH & SELECT ONLY - NO STATIC ROOM LIST) */}
+      {/* STEP 1: CARI & PILIH KAMAR (CLEAN DROPDOWN ONLY) */}
       {currentStep === 1 && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
-          <div className="border-b border-slate-100 pb-4">
+          <div className="text-center space-y-1.5 border-b border-slate-100 pb-5">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Langkah 1 dari 3
             </span>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
-              Cari & Pilih Kamar Guru
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+              Pilih Kamar Guru
             </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              Cari nama kamar atau pilih langsung dari dropdown untuk menentukan guru piket.
+            <p className="text-xs text-slate-500 max-w-md mx-auto">
+              Ketik atau cari nama kamar tempat Anda bertugas piket pada ujian muraja&apos;ah akhir tahun.
             </p>
           </div>
 
-          {/* Clean Dropdown Selection & Search Combobox */}
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
-                Pilih Nama Kamar:
-              </label>
-              <select
-                value={selectedRoomId}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setSelectedRoomId(val);
-                  if (val) {
-                    handleSelectRoomAndProceed(val);
-                  }
-                }}
-                className="w-full px-3.5 py-2.5 text-sm bg-slate-50 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors font-medium text-slate-900 cursor-pointer"
-              >
-                <option value="">-- Silakan Pilih Kamar --</option>
-                {piketRooms.map((room) => (
-                  <option key={room.id} value={room.id}>
-                    Kamar {room.nama_kamar} (Limit {room.limit_piket} Guru)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="relative flex items-center justify-center my-2">
-              <div className="border-t border-slate-200 w-full" />
-              <span className="bg-white px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 absolute">
-                atau cari nama kamar
-              </span>
-            </div>
-
-            {/* Live Search Input with Floating Popup */}
+          {/* Searchable Dropdown Input */}
+          <div className="space-y-2 max-w-lg mx-auto">
+            <label className="text-xs font-semibold text-slate-700 block">
+              Cari & Pilih Kamar:
+            </label>
             <div className="relative">
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onFocus={() => setIsDropdownOpen(true)}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setIsDropdownOpen(true);
-                  }}
-                  placeholder="Ketik untuk mencari (contoh: Gontor, Gandy, Saudi)..."
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-colors"
-                />
-              </div>
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onFocus={() => setIsDropdownOpen(true)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsDropdownOpen(true);
+                }}
+                placeholder="Ketik nama kamar (contoh: Gontor, Gandy, dll)..."
+                className="w-full pl-10 pr-4 py-3 text-xs bg-slate-50 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:bg-white transition-all shadow-2xs font-medium"
+              />
 
-              {/* Floating Suggestions Dropdown (Only appears when typing/focused) */}
-              {isDropdownOpen && searchQuery.trim().length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1.5 z-30 max-h-56 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg divide-y divide-slate-100">
-                  {matchingRooms.length > 0 ? (
-                    matchingRooms.map((room) => (
+              {/* Autocomplete Dropdown List */}
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-1.5 bg-white rounded-lg border border-slate-200 shadow-lg z-30 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                  {filteredRooms.length > 0 ? (
+                    filteredRooms.map((room) => (
                       <button
                         key={room.id}
                         type="button"
-                        onClick={() => handleSelectRoomAndProceed(room.id)}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left text-xs hover:bg-slate-50 transition-colors group"
+                        onClick={() => {
+                          setSearchQuery(room.nama_kamar);
+                          setIsDropdownOpen(false);
+                          handleSelectRoomAndProceed(room.id);
+                        }}
+                        className="w-full px-4 py-3 text-left hover:bg-slate-50 flex items-center justify-between transition-colors group"
                       >
                         <div className="flex items-center gap-2.5">
                           <DoorOpen className="h-4 w-4 text-slate-400 group-hover:text-slate-900" />
@@ -413,13 +417,28 @@ export default function PublicFormWizardPage() {
             </div>
           </div>
 
-          {/* Previous Submission Info Banner */}
+          {/* Previous Submission Info Banner with PIN Reset Option */}
           {isPreviousSubmission && (
-            <div className="p-3.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-900 flex items-start gap-2.5">
-              <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-              <div className="leading-relaxed">
-                <span className="font-semibold">Mode Edit Penetapan:</span> Kamar ini sebelumnya sudah pernah disubmit. Pilihan guru sebelumnya telah dimuat di bawah dan dapat Anda sesuaikan sebelum mengirim perubahan.
+            <div className="p-3.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-semibold">Mode Edit Penetapan:</span> Kamar ini sebelumnya sudah pernah disubmit. Anda dapat langsung mengubah pilihan guru atau mereset penetapan kamar.
+                </div>
               </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setPinInput('');
+                  setIsPinModalOpen(true);
+                }}
+                className="shrink-0 h-7 text-[11px] bg-white text-rose-700 hover:bg-rose-50 border-rose-200 font-semibold"
+              >
+                <Trash2 className="h-3 w-3" />
+                <span>Reset Penetapan (PIN)</span>
+              </Button>
             </div>
           )}
 
@@ -487,6 +506,7 @@ export default function PublicFormWizardPage() {
       {/* STEP 3: REVIEW & SUBMIT */}
       {currentStep === 3 && currentRoom && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
+          {/* Step 3 Header */}
           <div className="border-b border-slate-100 pb-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Langkah 3 dari 3
@@ -499,52 +519,49 @@ export default function PublicFormWizardPage() {
             </p>
           </div>
 
-          {/* Summary Box */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 grid grid-cols-3 gap-2 text-center text-xs">
-            <div>
-              <span className="text-slate-500">Kamar:</span>
-              <div className="text-sm font-bold text-slate-900 mt-0.5">{currentRoom.nama_kamar}</div>
+          {/* Room Summary Card */}
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-xs">
+            <div className="flex justify-between items-center text-slate-600">
+              <span>Kamar:</span>
+              <span className="font-bold text-slate-900">Kamar {currentRoom.nama_kamar}</span>
             </div>
-            <div>
-              <span className="text-slate-500">Batas Kuota:</span>
-              <div className="text-sm font-bold text-slate-900 mt-0.5">{currentRoom.limit_piket} orang</div>
+            <div className="flex justify-between items-center text-slate-600">
+              <span>Batas Kuota:</span>
+              <span className="font-semibold text-slate-900">{currentRoom.limit_piket} orang</span>
             </div>
-            <div>
-              <span className="text-slate-500">Jumlah Dipilih:</span>
-              <div className="text-sm font-bold text-slate-900 mt-0.5">{selectedGuruIds.length} orang</div>
+            <div className="flex justify-between items-center text-slate-600">
+              <span>Jumlah Dipilih:</span>
+              <span className="font-bold text-emerald-700">{selectedGuruIds.length} orang</span>
             </div>
           </div>
 
           {/* Selected Gurus List */}
           <div className="space-y-2">
-            <span className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
-              Daftar Guru Terpilih:
+            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
+              Daftar Guru Terpilih ({selectedGurusList.length} orang):
             </span>
-            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+            <div className="space-y-2">
               {selectedGurusList.map((g, idx) => (
-                <div key={g.id} className="flex items-center justify-between p-3.5 text-xs">
+                <div
+                  key={g.id}
+                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white text-xs shadow-2xs"
+                >
                   <div className="flex items-center gap-3">
-                    <span className="font-bold text-slate-400 w-5">{idx + 1}.</span>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-bold">
+                      {idx + 1}
+                    </span>
                     <div>
                       <div className="font-semibold text-slate-900">{g.nama}</div>
-                      <div className="text-[11px] text-slate-500">Tahun {g.tahun}</div>
+                      <div className="text-[11px] text-slate-500">Tahun: {g.tahun}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-emerald-700 font-semibold text-xs">
-                    <Check className="h-3.5 w-3.5" />
-                    <span>Ditetapkan</span>
-                  </div>
+                  <Check className="h-4 w-4 text-emerald-600" />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Notice */}
-          <p className="text-xs text-slate-500 leading-relaxed">
-            Pastikan pilihan sudah sesuai. Jika di kemudian hari terdapat perubahan, Anda dapat membuka kembali kamar ini untuk melakukan revisi penetapan.
-          </p>
-
-          {/* Step 3 Actions */}
+          {/* Bottom Submit Actions */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
             <Button
               variant="outline"
@@ -553,7 +570,7 @@ export default function PublicFormWizardPage() {
               disabled={isSubmitting}
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Ubah Pilihan</span>
+              <span>Kembali Edit</span>
             </Button>
 
             <Button
@@ -561,13 +578,67 @@ export default function PublicFormWizardPage() {
               size="md"
               onClick={handleExecuteSubmit}
               isLoading={isSubmitting}
-              disabled={isSubmitting}
             >
-              {isSubmitting ? 'Memproses...' : isPreviousSubmission ? 'Simpan Revisi Penetapan' : 'Simpan Penetapan Piket'}
+              <CheckCircle2 className="h-4 w-4" />
+              <span>{isPreviousSubmission ? 'Simpan Revisi Penetapan' : 'Simpan Penetapan Piket'}</span>
             </Button>
           </div>
         </div>
       )}
+
+      {/* PIN Verification Modal to Reset Room */}
+      <Dialog
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
+        title={`Reset Penetapan: Kamar ${currentRoom?.nama_kamar}`}
+        description="Masukkan PIN keamanan untuk mengosongkan penetapan piket pada kamar ini kembali ke status awal."
+        maxWidth="sm"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold">
+              <KeyRound className="h-4 w-4 text-amber-600 shrink-0" />
+              <span>Verifikasi PIN Keamanan</span>
+            </div>
+            <p className="leading-relaxed text-[11px]">
+              Gunakan PIN <strong>121212</strong> untuk mereset penetapan guru pada kamar ini.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="font-semibold text-slate-700 block">
+              Masukkan PIN:
+            </label>
+            <Input
+              type="password"
+              placeholder="121212"
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value)}
+              autoFocus
+              maxLength={6}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsPinModalOpen(false)}
+              disabled={isResettingWithPin}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmPinReset}
+              disabled={isResettingWithPin || pinInput.length === 0}
+            >
+              {isResettingWithPin ? 'Mereset...' : 'Konfirmasi Reset'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
