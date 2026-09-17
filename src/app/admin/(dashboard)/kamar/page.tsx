@@ -255,38 +255,35 @@ export default function AdminKamarPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => setIsBulkLimitModalOpen(true)}
               disabled={isProcessingBulk}
-              className="h-8 px-3 text-xs bg-white text-slate-900 hover:bg-slate-100 border-none font-semibold"
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md bg-white text-slate-900 hover:bg-slate-100 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <SlidersHorizontal className="h-3.5 w-3.5" />
               <span>Ubah Limit Masal</span>
-            </Button>
+            </button>
 
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => handleExecuteBulkAdaPiket(true)}
               disabled={isProcessingBulk}
-              className="h-8 px-3 text-xs bg-emerald-700 hover:bg-emerald-600 text-white border-none font-semibold"
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               <span>Set Ada Piket</span>
-            </Button>
+            </button>
 
-            <Button
-              variant="outline"
-              size="sm"
+            <button
+              type="button"
               onClick={() => handleExecuteBulkAdaPiket(false)}
               disabled={isProcessingBulk}
-              className="h-8 px-3 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border-none font-semibold"
+              className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ToggleLeft className="h-3.5 w-3.5" />
               <span>Tiadakan Piket</span>
-            </Button>
+            </button>
 
             <button
               onClick={() => setSelectedIds([])}

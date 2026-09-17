@@ -109,21 +109,41 @@ export function exportPiketSubmissionsWithMasterGuruToWorkbook(
     });
   });
 
+  // Sort guru by Kamar name (alphabetically), then by RNK (ascending)
+  const sortedGurus = [...gurus].sort((a, b) => {
+    const kamarA = (a.kamar?.nama_kamar || '').toLowerCase();
+    const kamarB = (b.kamar?.nama_kamar || '').toLowerCase();
+    const kamarCompare = kamarA.localeCompare(kamarB, 'id', { numeric: true });
+    if (kamarCompare !== 0) return kamarCompare;
+    return (a.rnk || 999) - (b.rnk || 999);
+  });
+
   // ==========================================
-  // SHEET 1: Master Data Guru & Status Piket
+  // SHEET 1: Master Data Guru & Status Piket (Sorted by Kamar)
   // ==========================================
-  const sheet1Data = gurus.map((g, idx) => {
+  const sheet1Data = sortedGurus.map((g, idx) => {
     const piketInfo = activePiketMap.get(g.id);
     const isPiket = Boolean(piketInfo);
+    const isKamarNonPiket = g.kamar ? ((g.kamar.limit_piket ?? 2) === 0 || g.kamar.ada_piket === false) : false;
+
+    let statusPiketText = '-';
+    if (isKamarNonPiket) {
+      statusPiketText = 'NON-PIKET (Kamar Bebas Piket)';
+    } else if (isPiket) {
+      statusPiketText = 'PIKET AKTIF';
+    } else {
+      statusPiketText = 'Tidak Piket';
+    }
 
     return {
       'No': idx + 1,
       'RNK': g.rnk || idx + 1,
       'Nama Guru': g.nama,
       'Kamar': g.kamar?.nama_kamar || '-',
+      'Tugas Piket Kamar': isKamarNonPiket ? 'Non-Piket' : `Ada Piket (Limit ${g.kamar?.limit_piket ?? 2})`,
       'Tahun': g.tahun || '-',
       'Status Guru': g.aktif ? 'Aktif' : 'Nonaktif',
-      'Terpilih Piket': isPiket ? 'PIKET AKTIF' : '-',
+      'Status Piket': statusPiketText,
       'Waktu Penetapan': piketInfo?.submittedAt ? new Date(piketInfo.submittedAt).toLocaleString('id-ID') : '-',
       'Disubmit Oleh': piketInfo?.submittedBy || '-',
     };
