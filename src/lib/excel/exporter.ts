@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { KamarOverview, PiketSubmission } from '@/types';
+import { Guru, KamarOverview, PiketSubmission } from '@/types';
 
 export function exportComprehensiveExcelWorkbook(
   kamarList: KamarOverview[],
@@ -31,9 +31,9 @@ export function exportComprehensiveExcelWorkbook(
     (sub.members || []).forEach((m) => {
       detailData.push({
         'No': rowNo++,
-        'Kamar': sub.kamar?.nama_kamar || '-',
-        'Nama Guru Piket': m.guru?.nama || '-',
         'RNK': m.guru?.rnk || '-',
+        'Nama Guru Piket': m.guru?.nama || '-',
+        'Kamar': sub.kamar?.nama_kamar || '-',
         'Tahun': m.guru?.tahun || '-',
         'Status Transaksi': sub.status,
         'Versi Penetapan': `Versi ${sub.version || 1}`,
@@ -63,7 +63,8 @@ export function exportComprehensiveExcelWorkbook(
 }
 
 export function exportKamarOverviewToWorkbook(kamarList: KamarOverview[]): XLSX.WorkBook {
-  const data = kamarList.map((k) => ({
+  const data = kamarList.map((k, idx) => ({
+    'No': idx + 1,
     'Kamar': k.nama_kamar,
     'Tugas Piket': k.ada_piket ? 'Ada Piket' : 'Non-Piket',
     'Jumlah Anggota': k.total_guru,
@@ -79,28 +80,119 @@ export function exportKamarOverviewToWorkbook(kamarList: KamarOverview[]): XLSX.
   return workbook;
 }
 
-export function exportPiketDetailToWorkbook(submissions: PiketSubmission[]): XLSX.WorkBook {
-  const rows: any[] = [];
+export function exportPiketSubmissionsWithMasterGuruToWorkbook(
+  gurus: Guru[],
+  submissions: PiketSubmission[]
+): XLSX.WorkBook {
+  const workbook = XLSX.utils.book_new();
 
-  submissions.forEach((sub) => {
-    if (sub.members && sub.members.length > 0) {
-      sub.members.forEach((m) => {
-        rows.push({
-          'Kamar': sub.kamar?.nama_kamar || '-',
-          'Nama Guru': m.guru?.nama || '-',
-          'Tahun': m.guru?.tahun || '-',
-          'Waktu Penetapan': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('id-ID') : '-',
-          'Operator': sub.submitted_by || 'Panitia',
-          'Status': sub.status,
-          'Revisi': sub.is_revision ? 'Ya' : 'Tidak',
+  // Create a fast lookup map for active piket teachers
+  const activePiketMap = new Map<string, {
+    kamarNama: string;
+    submittedAt: string;
+    submittedBy: string;
+    isRevision: boolean;
+  }>();
+
+  const successSubs = submissions.filter((s) => s.status === 'SUCCESS');
+  successSubs.forEach((sub) => {
+    (sub.members || []).forEach((m) => {
+      const gId = m.guru_id || m.guru?.id;
+      if (gId) {
+        activePiketMap.set(gId, {
+          kamarNama: sub.kamar?.nama_kamar || '-',
+          submittedAt: sub.submitted_at,
+          submittedBy: sub.submitted_by || 'Petugas Kamar',
+          isRevision: Boolean(sub.is_revision),
         });
-      });
-    }
+      }
+    });
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(rows);
+  // ==========================================
+  // SHEET 1: Master Data Guru & Status Piket
+  // ==========================================
+  const sheet1Data = gurus.map((g, idx) => {
+    const piketInfo = activePiketMap.get(g.id);
+    const isPiket = Boolean(piketInfo);
+
+    return {
+      'No': idx + 1,
+      'RNK': g.rnk || idx + 1,
+      'Nama Guru': g.nama,
+      'Kamar': g.kamar?.nama_kamar || '-',
+      'Tahun': g.tahun || '-',
+      'Status Guru': g.aktif ? 'Aktif' : 'Nonaktif',
+      'Terpilih Piket': isPiket ? 'PIKET AKTIF' : '-',
+      'Waktu Penetapan': piketInfo?.submittedAt ? new Date(piketInfo.submittedAt).toLocaleString('id-ID') : '-',
+      'Disubmit Oleh': piketInfo?.submittedBy || '-',
+    };
+  });
+
+  const wsSheet1 = XLSX.utils.json_to_sheet(sheet1Data);
+  XLSX.utils.book_append_sheet(workbook, wsSheet1, 'Data Guru & Status Piket');
+
+  // ==========================================
+  // SHEET 2: Detail Hasil Submit Piket
+  // ==========================================
+  const sheet2Data: any[] = [];
+  let subRowNo = 1;
+
+  submissions.forEach((sub) => {
+    (sub.members || []).forEach((m) => {
+      sheet2Data.push({
+        'No': subRowNo++,
+        'RNK': m.guru?.rnk || '-',
+        'Nama Guru Piket': m.guru?.nama || '-',
+        'Kamar': sub.kamar?.nama_kamar || '-',
+        'Tahun': m.guru?.tahun || sub.kamar?.nama_kamar || '-',
+        'Waktu Penetapan': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('id-ID') : '-',
+        'Operator / Disubmit Oleh': sub.submitted_by || 'Petugas Kamar',
+        'Status Transaksi': sub.status,
+        'Versi Penetapan': `Versi ${sub.version || 1}`,
+        'Revisi': sub.is_revision ? 'Ya (Revisi)' : 'Penetapan Pertama',
+        'Catatan': sub.notes || '-',
+      });
+    });
+  });
+
+  const wsSheet2 = XLSX.utils.json_to_sheet(sheet2Data);
+  XLSX.utils.book_append_sheet(workbook, wsSheet2, 'Hasil Submit Piket');
+
+  return workbook;
+}
+
+export function exportPiketDetailToWorkbook(
+  submissions: PiketSubmission[],
+  gurus?: Guru[]
+): XLSX.WorkBook {
+  if (gurus && gurus.length > 0) {
+    return exportPiketSubmissionsWithMasterGuruToWorkbook(gurus, submissions);
+  }
+
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Detail Piket');
+  const sheet2Data: any[] = [];
+  let subRowNo = 1;
+
+  submissions.forEach((sub) => {
+    (sub.members || []).forEach((m) => {
+      sheet2Data.push({
+        'No': subRowNo++,
+        'RNK': m.guru?.rnk || '-',
+        'Nama Guru Piket': m.guru?.nama || '-',
+        'Kamar': sub.kamar?.nama_kamar || '-',
+        'Tahun': m.guru?.tahun || '-',
+        'Waktu Penetapan': sub.submitted_at ? new Date(sub.submitted_at).toLocaleString('id-ID') : '-',
+        'Operator / Disubmit Oleh': sub.submitted_by || 'Petugas Kamar',
+        'Status Transaksi': sub.status,
+        'Revisi': sub.is_revision ? 'Ya (Revisi)' : 'Penetapan Pertama',
+        'Catatan': sub.notes || '-',
+      });
+    });
+  });
+
+  const ws = XLSX.utils.json_to_sheet(sheet2Data);
+  XLSX.utils.book_append_sheet(workbook, ws, 'Hasil Submit Piket');
   return workbook;
 }
 

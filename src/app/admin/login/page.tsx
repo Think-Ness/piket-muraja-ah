@@ -9,8 +9,8 @@ import { Shield, AlertCircle } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("muraja'ah@admin.id");
-  const [password, setPassword] = useState('muraja\'ah2026');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,7 +85,7 @@ export default function AdminLoginPage() {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="muraja'ah@admin.id"
+            placeholder="admin@pesantren.sch.id"
           />
 
           <Input
@@ -94,7 +94,7 @@ export default function AdminLoginPage() {
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••••••"
+            placeholder="Masukkan kata sandi..."
           />
 
           <Button

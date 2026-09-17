@@ -7,8 +7,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const format = (searchParams.get('format') || 'xlsx').toLowerCase() as 'xlsx' | 'csv';
 
-    const submissions = await DataService.getPiketSubmissions();
-    const workbook = exportPiketDetailToWorkbook(submissions);
+    const [gurusRes, submissions] = await Promise.all([
+      DataService.getGuruList({ limit: 5000 }),
+      DataService.getPiketSubmissions(),
+    ]);
+
+    const workbook = exportPiketDetailToWorkbook(submissions, gurusRes.gurus);
     const buffer = workbookToBuffer(workbook, format);
 
     const contentType =
@@ -16,7 +20,7 @@ export async function GET(request: NextRequest) {
         ? 'text/csv; charset=utf-8'
         : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-    const fileName = `Detail-Piket-Murajaah-${new Date().toISOString().split('T')[0]}.${format}`;
+    const fileName = `Hasil-Penetapan-Piket-Murajaah-${new Date().toISOString().split('T')[0]}.${format}`;
 
     return new Response(buffer as any, {
       status: 200,
