@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Neutral / Base Tokens (Institutional Slate & Neutral) */
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --surface-subtle: #f1f5f9;
+  --surface-muted: #e2e8f0;
+  --surface-hover: #f8fafc;
+
+  --border: #e2e8f0;
+  --border-subtle: #edf2f7;
+  --border-strong: #cbd5e1;
+
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-dimmed: #94a3b8;
+
+  /* Accent (Institutional Deep Navy / Slate) */
+  --accent: #0f172a;
+  --accent-hover: #1e293b;
+  --accent-foreground: #ffffff;
+  --accent-subtle: #f1f5f9;
+
+  /* Status Tokens */
+  --success: #059669;
+  --success-surface: #ecfdf5;
+  --success-border: #a7f3d0;
+  --success-text: #065f46;
+
+  --warning: #d97706;
+  --warning-surface: #fffbeb;
+  --warning-border: #fde68a;
+  --warning-text: #92400e;
+
+  --danger: #dc2626;
+  --danger-surface: #fef2f2;
+  --danger-border: #fecaca;
+  --danger-text: #991b1b;
+
+  --neutral-surface: #f8fafc;
+  --neutral-border: #e2e8f0;
+  --neutral-text: #475569;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-main);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom Focus Ring for Accessibility */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* Custom Table Styles */
+.table-dense th {
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background-color: var(--surface-subtle);
+}
+
+.table-dense td {
+  padding: 10px 12px;
+  font-size: 13.5px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* Operational Skeleton */
+@keyframes pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.skeleton-box {
+  background-color: var(--surface-muted);
+  animation: pulse-subtle 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  border-radius: 4px;
+}
