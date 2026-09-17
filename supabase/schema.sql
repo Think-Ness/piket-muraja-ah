@@ -363,12 +363,16 @@ ALTER TABLE piket_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE piket_submission_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Public Policies: Read settings, active kamar, active guru, active submissions
+-- Public Policies: Read settings, active kamar, active guru, active submissions, and submit piket
 CREATE POLICY "Public read event_settings" ON event_settings FOR SELECT USING (true);
 CREATE POLICY "Public read active kamar" ON kamar FOR SELECT USING (aktif = true);
 CREATE POLICY "Public read active guru" ON guru FOR SELECT USING (aktif = true);
 CREATE POLICY "Public read active piket_submissions" ON piket_submissions FOR SELECT USING (status = 'SUCCESS');
+CREATE POLICY "Public insert piket_submissions" ON piket_submissions FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public update piket_submissions" ON piket_submissions FOR UPDATE USING (true) WITH CHECK (true);
 CREATE POLICY "Public read piket_submission_members" ON piket_submission_members FOR SELECT USING (true);
+CREATE POLICY "Public insert piket_submission_members" ON piket_submission_members FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public insert audit_logs" ON audit_logs FOR INSERT WITH CHECK (true);
 
 -- Admin / Authenticated Policies: Full Access
 CREATE POLICY "Admin full access event_settings" ON event_settings FOR ALL TO authenticated USING (true) WITH CHECK (true);
