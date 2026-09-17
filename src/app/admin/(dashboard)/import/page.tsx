@@ -21,10 +21,13 @@ import {
   RefreshCw,
   Info,
   Layers,
-  Trash2
+  Trash2,
+  Filter,
+  Check
 } from 'lucide-react';
 
 type Step = 'UPLOAD' | 'PREVIEW' | 'COMPLETE';
+type FilterTab = 'ALL' | 'VALID' | 'WARNING' | 'ERROR';
 
 export default function AdminImportPage() {
   const router = useRouter();
@@ -37,6 +40,14 @@ export default function AdminImportPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [importedBatch, setImportedBatch] = useState<any>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Table Filter Tab
+  const [activeTab, setActiveTab] = useState<FilterTab>('ALL');
+
+  // Progress Tracking Modal
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [progressStage, setProgressStage] = useState('Menyiapkan data...');
+  const [progressPercent, setProgressPercent] = useState(0);
 
   // Destructive Confirmation Modal for SYNC mode
   const [isResetConfirmModalOpen, setIsResetConfirmModalOpen] = useState(false);
@@ -83,6 +94,9 @@ export default function AdminImportPage() {
 
     setIsResetConfirmModalOpen(false);
     setIsProcessing(true);
+    setIsProgressModalOpen(true);
+    setProgressPercent(5);
+    setProgressStage('Memulai proses import...');
     setErrorMessage(null);
 
     try {
@@ -90,19 +104,38 @@ export default function AdminImportPage() {
         validRowsToImport,
         importMode,
         validationResult.fileName,
-        'Admin'
+        'Admin',
+        (stage, percent) => {
+          setProgressStage(stage);
+          setProgressPercent(percent);
+        }
       );
       setImportedBatch(batch);
-      setStep('COMPLETE');
-      showToast(`Import berhasil: ${validRowsToImport.length} data guru disimpan ke database.`, 'success');
+      setProgressPercent(100);
+      setProgressStage('Selesai!');
+      setTimeout(() => {
+        setIsProgressModalOpen(false);
+        setStep('COMPLETE');
+        showToast(`Import berhasil: ${validRowsToImport.length} data guru disimpan ke database.`, 'success');
+      }, 600);
     } catch (err: any) {
       const msg = err.message || 'Gagal menjalankan proses import ke database.';
       setErrorMessage(msg);
+      setIsProgressModalOpen(false);
       showToast(msg, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
+
+  // Filtered rows based on selected tab
+  const filteredRows = React.useMemo(() => {
+    if (!validationResult) return [];
+    if (activeTab === 'VALID') return validationResult.rows.filter((r) => r.isValid && r.warnings.length === 0);
+    if (activeTab === 'WARNING') return validationResult.rows.filter((r) => r.warnings.length > 0);
+    if (activeTab === 'ERROR') return validationResult.rows.filter((r) => !r.isValid);
+    return validationResult.rows;
+  }, [validationResult, activeTab]);
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -168,7 +201,7 @@ export default function AdminImportPage() {
           <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <span className="font-bold block">Gagal Melakukan Import:</span>
-            <p>{errorMessage}</p>
+            <p className="leading-relaxed">{errorMessage}</p>
           </div>
         </div>
       )}
@@ -311,13 +344,64 @@ export default function AdminImportPage() {
             </div>
           </div>
 
-          {/* Preview Table */}
+          {/* Preview Table with Filter Tabs */}
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden text-xs">
-            <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex justify-between items-center">
-              <span>Preview Data Terbaca ({validationResult.rows.length} baris)</span>
-              <span>Kamar terdeteksi: {validationResult.uniqueKamarNames.length}</span>
+            <div className="p-3 bg-slate-50 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+              <div className="flex items-center gap-2 font-semibold text-slate-700">
+                <Filter className="h-4 w-4 text-slate-400" />
+                <span>Filter Tampilan Baris:</span>
+              </div>
+
+              {/* Tabs */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ALL')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    activeTab === 'ALL'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  Semua ({validationResult.totalRows})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('VALID')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    activeTab === 'VALID'
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-200'
+                  }`}
+                >
+                  Valid Saja ({validationResult.validCount - validationResult.warningCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('WARNING')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    activeTab === 'WARNING'
+                      ? 'bg-amber-600 text-white'
+                      : 'bg-white text-amber-800 hover:bg-amber-50 border border-amber-200'
+                  }`}
+                >
+                  Peringatan ({validationResult.warningCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('ERROR')}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                    activeTab === 'ERROR'
+                      ? 'bg-rose-700 text-white'
+                      : 'bg-white text-rose-800 hover:bg-rose-50 border border-rose-200'
+                  }`}
+                >
+                  Error ({validationResult.errorCount})
+                </button>
+              </div>
             </div>
-            <div className="max-h-72 overflow-y-auto">
+
+            <div className="max-h-80 overflow-y-auto">
               <table className="w-full text-left border-collapse table-dense">
                 <thead>
                   <tr>
@@ -326,30 +410,53 @@ export default function AdminImportPage() {
                     <th>Nama Guru</th>
                     <th>Kamar</th>
                     <th>Tahun</th>
-                    <th>Status Validasi</th>
+                    <th>Status & Penjelasan Validasi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {validationResult.rows.slice(0, 100).map((r) => (
-                    <tr key={r.rowNumber} className={!r.isValid ? 'bg-rose-50/50' : ''}>
-                      <td className="text-slate-400 font-mono">#{r.rowNumber}</td>
-                      <td>{r.rnk || '-'}</td>
-                      <td className="font-semibold text-slate-900">{r.nama || '<Kosong>'}</td>
-                      <td>{r.nama_kamar || '<Kosong>'}</td>
-                      <td>{r.tahun}</td>
-                      <td>
-                        {r.isValid ? (
-                          r.warnings.length > 0 ? (
-                            <span className="text-amber-700 font-medium">Valid (Warning)</span>
+                  {filteredRows.length > 0 ? (
+                    filteredRows.slice(0, 150).map((r) => (
+                      <tr key={r.rowNumber} className={!r.isValid ? 'bg-rose-50/60' : r.warnings.length > 0 ? 'bg-amber-50/40' : ''}>
+                        <td className="text-slate-400 font-mono">#{r.rowNumber}</td>
+                        <td>{r.rnk || '-'}</td>
+                        <td className="font-semibold text-slate-900">{r.nama || '<Kosong>'}</td>
+                        <td>{r.nama_kamar || '<Kosong>'}</td>
+                        <td>{r.tahun}</td>
+                        <td>
+                          {r.isValid ? (
+                            r.warnings.length > 0 ? (
+                              <div className="space-y-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded">
+                                  <AlertTriangle className="h-3 w-3 text-amber-600" />
+                                  <span>Peringatan</span>
+                                </span>
+                                <div className="text-[11px] text-amber-900">{r.warnings.join(' • ')}</div>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded">
+                                <Check className="h-3 w-3 text-emerald-600" />
+                                <span>Valid</span>
+                              </span>
+                            )
                           ) : (
-                            <span className="text-emerald-700 font-medium">Valid</span>
-                          )
-                        ) : (
-                          <span className="text-rose-700 font-semibold">{r.errors.join(', ')}</span>
-                        )}
+                            <div className="space-y-0.5">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-100 px-1.5 py-0.5 rounded">
+                                <AlertCircle className="h-3 w-3 text-rose-600" />
+                                <span>Gagal</span>
+                              </span>
+                              <div className="text-[11px] text-rose-900 font-semibold">{r.errors.join(' • ')}</div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-slate-500 text-xs">
+                        Tidak ada data pada kategori filter ini.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -458,6 +565,44 @@ export default function AdminImportPage() {
             >
               {isProcessing ? 'Mereset & Mengimpor...' : 'Ya, Reset & Import Sekarang'}
             </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Live Import Progress Modal */}
+      <Dialog
+        isOpen={isProgressModalOpen}
+        onClose={() => {}}
+        title="Sedang Memproses Import Data..."
+        description="Mohon tunggu, sistem sedang memvalidasi dan menyimpan data ke database Supabase."
+        maxWidth="sm"
+      >
+        <div className="space-y-5 text-xs py-2">
+          <div className="flex items-center justify-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white animate-pulse">
+              <RefreshCw className="h-6 w-6 animate-spin" />
+            </div>
+          </div>
+
+          <div className="space-y-2 text-center">
+            <div className="font-semibold text-slate-900 text-sm">
+              {progressStage}
+            </div>
+            <div className="text-slate-500 text-xs">
+              Proses: {progressPercent}%
+            </div>
+          </div>
+
+          {/* Animated Progress Bar */}
+          <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+            <div
+              className="bg-slate-900 h-full transition-all duration-300 rounded-full"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center text-[11px] text-slate-500">
+            Harap tidak menutup browser atau me-refresh halaman ini selama proses berlangsung.
           </div>
         </div>
       </Dialog>

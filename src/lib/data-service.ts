@@ -975,9 +975,12 @@ export const DataService = {
     validRows: ValidatedImportRow[],
     mode: 'SYNC' | 'APPEND',
     fileName: string,
-    actor = 'Admin'
+    actor = 'Admin',
+    onProgress?: (stage: string, percent: number) => void
   ): Promise<ImportBatch> {
     const batchId = `batch_${Date.now()}`;
+
+    onProgress?.('Menyaring baris data...', 10);
 
     // Filter out rows that are junk/alumni/ampash
     const cleanedRows = validRows.filter(
@@ -989,12 +992,15 @@ export const DataService = {
         const supabase = createClient();
 
         if (mode === 'SYNC') {
+          onProgress?.('Mereset database lama (kamar, guru & penetapan)...', 25);
           // Reset all submissions, gurus, and kamar
           await supabase.from('piket_submission_members').delete().neq('id', '00000000-0000-0000-0000-000000000000');
           await supabase.from('piket_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
           await supabase.from('guru').delete().neq('id', '00000000-0000-0000-0000-000000000000');
           await supabase.from('kamar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         }
+
+        onProgress?.('Menyinkronkan master kamar...', 45);
 
         // 1. Get or create distinct rooms
         const uniqueRoomNames = Array.from(new Set(cleanedRows.map((r) => r.nama_kamar.trim())));
@@ -1007,7 +1013,6 @@ export const DataService = {
           .map((name, idx) => ({
             nama_kamar: name,
             limit_piket: 2,
-            ada_piket: true,
             aktif: true,
             urutan: roomMap.size + idx + 1,
           }));
@@ -1020,6 +1025,8 @@ export const DataService = {
           if (rErr) throw new Error(`Gagal membuat master kamar: ${rErr.message}`);
           (newRooms || []).forEach((k) => roomMap.set(k.nama_kamar.toLowerCase().trim(), k.id));
         }
+
+        onProgress?.('Membuat batch riwayat import...', 60);
 
         // 2. Insert batch record
         const { data: batchData } = await supabase
@@ -1036,6 +1043,8 @@ export const DataService = {
           .single();
 
         const activeBatchId = batchData?.id || batchId;
+
+        onProgress?.('Menyimpan data guru...', 75);
 
         // 3. Prepare Gurus batch
         const guruInserts: Array<{
@@ -1065,9 +1074,13 @@ export const DataService = {
         const chunkSize = 150;
         for (let i = 0; i < guruInserts.length; i += chunkSize) {
           const chunk = guruInserts.slice(i, i + chunkSize);
+          const currentPercent = Math.min(95, 75 + Math.round((i / guruInserts.length) * 20));
+          onProgress?.(`Menyimpan data guru (${Math.min(i + chunkSize, guruInserts.length)}/${guruInserts.length})...`, currentPercent);
           const { error: gErr } = await supabase.from('guru').insert(chunk);
           if (gErr) throw new Error(`Gagal menyimpan data guru: ${gErr.message}`);
         }
+
+        onProgress?.('Mencatat audit log...', 98);
 
         // 4. Audit Log
         await supabase.from('audit_logs').insert({
@@ -1077,6 +1090,8 @@ export const DataService = {
           entity_id: activeBatchId,
           new_data: { file_name: fileName, mode, total_imported: guruInserts.length },
         });
+
+        onProgress?.('Selesai!', 100);
 
         return {
           id: activeBatchId,
