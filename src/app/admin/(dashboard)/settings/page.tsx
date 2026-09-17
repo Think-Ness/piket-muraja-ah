@@ -44,6 +44,19 @@ export default function AdminSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
+  const toDateTimeLocalString = (isoStr: string | null | undefined): string => {
+    if (!isoStr) return '';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const date = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${date}T${hours}:${minutes}`;
+  };
+
   const loadSettings = async () => {
     setLoading(true);
     try {
@@ -57,8 +70,8 @@ export default function AdminSettingsPage() {
       setLogoUrl(data.logo_url || '');
       setWhatsappNumber(data.whatsapp_number || '6281234567890');
       setWhatsappLabel(data.whatsapp_label || 'Hubungi Panitia Piket');
-      setWaktuBuka(data.waktu_buka ? new Date(data.waktu_buka).toISOString().slice(0, 16) : '');
-      setWaktuTutup(data.waktu_tutup ? new Date(data.waktu_tutup).toISOString().slice(0, 16) : '');
+      setWaktuBuka(toDateTimeLocalString(data.waktu_buka));
+      setWaktuTutup(toDateTimeLocalString(data.waktu_tutup));
     } catch (err) {
       console.error('Error loading settings:', err);
     } finally {

@@ -91,17 +91,36 @@ export const DataService = {
         const supabase = createClient();
         const { data, error } = await supabase.from('event_settings').select('*').limit(1).single();
         if (!error && data) {
-          const now = new Date();
-          let effectiveStatus = data.form_status;
-          if (data.waktu_buka && new Date(data.waktu_buka) > now) {
-            effectiveStatus = 'CLOSED';
+          let eventSubtitle = data.event_subtitle || '';
+          let metaExtras: Record<string, any> = {};
+
+          if (eventSubtitle.startsWith('__META__:')) {
+            try {
+              metaExtras = JSON.parse(eventSubtitle.substring(9));
+              eventSubtitle = metaExtras.event_subtitle || 'Penentuan Piket Kamar Guru';
+            } catch (e) {
+              console.warn('Failed to parse meta extras:', e);
+            }
           }
-          if (data.waktu_tutup && new Date(data.waktu_tutup) < now) {
-            effectiveStatus = 'CLOSED';
-          }
-          return {
+
+          const combined = {
             ...memorySettings,
             ...data,
+            ...metaExtras,
+            event_subtitle: eventSubtitle,
+          };
+
+          const now = new Date();
+          let effectiveStatus = combined.form_status;
+          if (combined.waktu_buka && new Date(combined.waktu_buka) > now) {
+            effectiveStatus = 'CLOSED';
+          }
+          if (combined.waktu_tutup && new Date(combined.waktu_tutup) < now) {
+            effectiveStatus = 'CLOSED';
+          }
+
+          return {
+            ...combined,
             form_status: effectiveStatus,
           };
         }
@@ -168,24 +187,44 @@ export const DataService = {
       try {
         const supabase = createClient();
         const current = await this.getSettings();
+
+        // 1. Try direct update
         const { data, error } = await supabase
           .from('event_settings')
           .update({ ...settings, updated_at: new Date().toISOString(), updated_by: actor })
           .eq('id', current.id)
           .select()
           .single();
+
         if (!error && data) {
           memorySettings = { ...memorySettings, ...data };
           return { ...memorySettings };
-        } else if (error && error.message.includes('logo_url')) {
-          const { logo_url, ...otherFields } = settings;
-          await supabase
-            .from('event_settings')
-            .update({ ...otherFields, updated_at: new Date().toISOString(), updated_by: actor })
-            .eq('id', current.id);
         }
+
+        // 2. If direct update fails because columns like waktu_buka, waktu_tutup, logo_url don't exist physically:
+        // Pack all extras cleanly into event_subtitle with '__META__:' prefix
+        const metaExtras = {
+          event_subtitle: settings.event_subtitle !== undefined ? settings.event_subtitle : current.event_subtitle,
+          waktu_buka: settings.waktu_buka !== undefined ? settings.waktu_buka : current.waktu_buka,
+          waktu_tutup: settings.waktu_tutup !== undefined ? settings.waktu_tutup : current.waktu_tutup,
+          whatsapp_number: settings.whatsapp_number !== undefined ? settings.whatsapp_number : current.whatsapp_number,
+          whatsapp_label: settings.whatsapp_label !== undefined ? settings.whatsapp_label : current.whatsapp_label,
+          logo_url: settings.logo_url !== undefined ? settings.logo_url : current.logo_url,
+        };
+
+        const safePayload: Record<string, any> = {
+          event_name: settings.event_name || current.event_name,
+          event_subtitle: `__META__:${JSON.stringify(metaExtras)}`,
+          committee_name: settings.committee_name || current.committee_name,
+          academic_year: settings.academic_year || current.academic_year,
+          form_status: settings.form_status || current.form_status,
+          updated_at: new Date().toISOString(),
+          updated_by: actor,
+        };
+
+        await supabase.from('event_settings').update(safePayload).eq('id', current.id);
       } catch (err) {
-        console.warn('Supabase updateSettings fallback to local:', err);
+        console.warn('Supabase updateSettings fallback:', err);
       }
     }
 
