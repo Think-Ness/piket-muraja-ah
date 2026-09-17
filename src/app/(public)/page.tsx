@@ -54,11 +54,6 @@ export default function PublicFormWizardPage() {
   const [submittedCount, setSubmittedCount] = useState(0);
   const [isRevisionSubmission, setIsRevisionSubmission] = useState(false);
 
-  // PIN Reset Modal State
-  const [isPinModalOpen, setIsPinModalOpen] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [isResettingWithPin, setIsResettingWithPin] = useState(false);
-
   // Initial load
   useEffect(() => {
     const init = async () => {
@@ -173,27 +168,6 @@ export default function PublicFormWizardPage() {
     }
   };
 
-  const handleConfirmPinReset = async () => {
-    if (!currentRoom) return;
-    if (pinInput.trim() !== '121212') {
-      showToast('PIN keamanan salah. Masukkan PIN 121212.', 'error');
-      return;
-    }
-
-    setIsResettingWithPin(true);
-    try {
-      await DataService.resetKamarPiket(currentRoom.id, 'Public User via PIN 121212');
-      setSelectedGuruIds([]);
-      setIsPreviousSubmission(false);
-      setIsPinModalOpen(false);
-      setPinInput('');
-      showToast(`Penetapan kamar ${currentRoom.nama_kamar} berhasil direset (dikosongkan).`, 'success');
-    } catch (err: any) {
-      showToast(err.message || 'Gagal mereset penetapan kamar.', 'error');
-    } finally {
-      setIsResettingWithPin(false);
-    }
-  };
 
   const handleResetForm = () => {
     setCurrentStep(1);
@@ -417,28 +391,13 @@ export default function PublicFormWizardPage() {
             </div>
           </div>
 
-          {/* Previous Submission Info Banner with PIN Reset Option */}
+          {/* Previous Submission Info Banner */}
           {isPreviousSubmission && (
-            <div className="p-3.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-900 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div className="flex items-start gap-2.5">
-                <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <span className="font-semibold">Mode Edit Penetapan:</span> Kamar ini sebelumnya sudah pernah disubmit. Anda dapat langsung mengubah pilihan guru atau mereset penetapan kamar.
-                </div>
+            <div className="p-3.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-900 flex items-center gap-2.5">
+              <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0" />
+              <div className="leading-relaxed">
+                <span className="font-semibold">Mode Edit Penetapan:</span> Kamar ini sebelumnya sudah pernah disubmit. Anda dapat langsung mengubah centang pilihan guru di bawah untuk memperbarui penetapan.
               </div>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setPinInput('');
-                  setIsPinModalOpen(true);
-                }}
-                className="shrink-0 h-7 text-[11px] bg-white text-rose-700 hover:bg-rose-50 border-rose-200 font-semibold"
-              >
-                <Trash2 className="h-3 w-3" />
-                <span>Reset Penetapan (PIN)</span>
-              </Button>
             </div>
           )}
 
@@ -459,42 +418,41 @@ export default function PublicFormWizardPage() {
             {filteredGurus.length > 0 ? (
               filteredGurus.map((guru) => {
                 const isSelected = selectedGuruIds.includes(guru.id);
-                const isQuotaFull = selectedGuruIds.length >= currentRoom.limit_piket;
-                const isDisabled = !isSelected && isQuotaFull;
-
+                const isLimitReached = selectedGuruIds.length >= (currentRoom?.limit_piket ?? 2);
+                const isDisabled = !isSelected && isLimitReached;
                 return (
                   <GuruRow
                     key={guru.id}
                     guru={guru}
                     isSelected={isSelected}
                     isDisabled={isDisabled}
-                    onToggle={handleToggleGuru}
+                    onToggle={() => handleToggleGuru(guru.id)}
                   />
                 );
               })
             ) : (
-              <div className="p-6 text-center text-xs text-slate-500 rounded-lg border border-slate-200">
-                Tidak ada guru yang sesuai pencarian.
+              <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-lg">
+                Tidak ada guru ditemukan di kamar ini.
               </div>
             )}
           </div>
 
-          {/* Step 2 Bottom Actions */}
+          {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
             <Button
               variant="outline"
-              size="md"
+              size="sm"
               onClick={() => setCurrentStep(1)}
+              disabled={isSubmitting}
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Ganti Kamar</span>
             </Button>
-
             <Button
               variant="primary"
-              size="md"
-              disabled={selectedGuruIds.length === 0}
+              size="sm"
               onClick={() => setCurrentStep(3)}
+              disabled={selectedGuruIds.length === 0 || isSubmitting}
             >
               <span>Lanjut ke Review ({selectedGuruIds.length} Dipilih)</span>
               <ArrowRight className="h-4 w-4" />
@@ -503,15 +461,14 @@ export default function PublicFormWizardPage() {
         </div>
       )}
 
-      {/* STEP 3: REVIEW & SUBMIT */}
+      {/* STEP 3: Review & Final Confirmation */}
       {currentStep === 3 && currentRoom && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
-          {/* Step 3 Header */}
-          <div className="border-b border-slate-100 pb-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6 animate-in fade-in">
+          <div>
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
               Langkah 3 dari 3
-            </span>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-0.5">
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">
               Review & Konfirmasi Penetapan
             </h2>
             <p className="text-xs text-slate-500 mt-1">
@@ -519,40 +476,44 @@ export default function PublicFormWizardPage() {
             </p>
           </div>
 
-          {/* Room Summary Card */}
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2 text-xs">
-            <div className="flex justify-between items-center text-slate-600">
-              <span>Kamar:</span>
-              <span className="font-bold text-slate-900">Kamar {currentRoom.nama_kamar}</span>
+          {/* Summary Box */}
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 space-y-2 text-xs">
+            <div className="flex justify-between text-slate-700">
+              <span className="text-slate-500">Kamar:</span>
+              <span className="font-bold text-slate-900">{currentRoom.nama_kamar}</span>
             </div>
-            <div className="flex justify-between items-center text-slate-600">
-              <span>Batas Kuota:</span>
-              <span className="font-semibold text-slate-900">{currentRoom.limit_piket} orang</span>
+            <div className="flex justify-between text-slate-700">
+              <span className="text-slate-500">Batas Kuota:</span>
+              <span className="font-medium">{currentRoom.limit_piket} orang</span>
             </div>
-            <div className="flex justify-between items-center text-slate-600">
-              <span>Jumlah Dipilih:</span>
-              <span className="font-bold text-emerald-700">{selectedGuruIds.length} orang</span>
+            <div className="flex justify-between text-slate-700">
+              <span className="text-slate-500">Jumlah Dipilih:</span>
+              <span className="font-bold text-emerald-700">
+                {selectedGuruIds.length} orang
+              </span>
             </div>
           </div>
 
-          {/* Selected Gurus List */}
+          {/* Selected Teachers List */}
           <div className="space-y-2">
-            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider block">
-              Daftar Guru Terpilih ({selectedGurusList.length} orang):
-            </span>
+            <div className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+              Daftar Guru Terpilih ({selectedGurusList.length} Orang):
+            </div>
             <div className="space-y-2">
-              {selectedGurusList.map((g, idx) => (
+              {selectedGurusList.map((g, index) => (
                 <div
                   key={g.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white text-xs shadow-2xs"
+                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white text-xs"
                 >
                   <div className="flex items-center gap-3">
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-bold">
-                      {idx + 1}
+                      {index + 1}
                     </span>
                     <div>
-                      <div className="font-semibold text-slate-900">{g.nama}</div>
-                      <div className="text-[11px] text-slate-500">Tahun: {g.tahun}</div>
+                      <div className="font-bold text-slate-900">{g.nama}</div>
+                      <div className="text-[11px] text-slate-400">
+                        {g.tahun ? `Tahun: ${g.tahun}` : ''} {g.rnk ? `• RNK #${g.rnk}` : ''}
+                      </div>
                     </div>
                   </div>
                   <Check className="h-4 w-4 text-emerald-600" />
@@ -561,22 +522,22 @@ export default function PublicFormWizardPage() {
             </div>
           </div>
 
-          {/* Bottom Submit Actions */}
+          {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
             <Button
               variant="outline"
-              size="md"
+              size="sm"
               onClick={() => setCurrentStep(2)}
               disabled={isSubmitting}
             >
               <ArrowLeft className="h-4 w-4" />
               <span>Kembali Edit</span>
             </Button>
-
             <Button
               variant="primary"
-              size="md"
+              size="sm"
               onClick={handleExecuteSubmit}
+              disabled={isSubmitting}
               isLoading={isSubmitting}
             >
               <CheckCircle2 className="h-4 w-4" />
@@ -585,60 +546,6 @@ export default function PublicFormWizardPage() {
           </div>
         </div>
       )}
-
-      {/* PIN Verification Modal to Reset Room */}
-      <Dialog
-        isOpen={isPinModalOpen}
-        onClose={() => setIsPinModalOpen(false)}
-        title={`Reset Penetapan: Kamar ${currentRoom?.nama_kamar}`}
-        description="Masukkan PIN keamanan untuk mengosongkan penetapan piket pada kamar ini kembali ke status awal."
-        maxWidth="sm"
-      >
-        <div className="space-y-4 text-xs">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 space-y-1">
-            <div className="flex items-center gap-1.5 font-bold">
-              <KeyRound className="h-4 w-4 text-amber-600 shrink-0" />
-              <span>Verifikasi PIN Keamanan</span>
-            </div>
-            <p className="leading-relaxed text-[11px]">
-              Gunakan PIN <strong>121212</strong> untuk mereset penetapan guru pada kamar ini.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 block">
-              Masukkan PIN:
-            </label>
-            <Input
-              type="password"
-              placeholder="121212"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              autoFocus
-              maxLength={6}
-            />
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setIsPinModalOpen(false)}
-              disabled={isResettingWithPin}
-            >
-              Batal
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={handleConfirmPinReset}
-              disabled={isResettingWithPin || pinInput.length === 0}
-            >
-              {isResettingWithPin ? 'Mereset...' : 'Konfirmasi Reset'}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
     </div>
   );
 }

@@ -694,6 +694,53 @@ export const DataService = {
     };
   },
 
+  async resetAllPiketSubmissions(actor = 'Admin'): Promise<{ success: boolean; message: string; cancelledCount: number }> {
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        const { data: updatedData } = await supabase
+          .from('piket_submissions')
+          .update({ status: 'CANCELLED' })
+          .eq('status', 'SUCCESS')
+          .select('id');
+        
+        const count = updatedData ? updatedData.length : 0;
+        return {
+          success: true,
+          cancelledCount: count,
+          message: `Berhasil mereset seluruh hasil submit piket (${count} penetapan dibatalkan).`,
+        };
+      } catch (err) {
+        console.warn('Supabase resetAllPiketSubmissions fallback:', err);
+      }
+    }
+
+    let cancelledCount = 0;
+    memorySubmissions.forEach((sub) => {
+      if (sub.status === 'SUCCESS') {
+        sub.status = 'CANCELLED';
+        cancelledCount++;
+      }
+    });
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'RESET_ALL_PIKET',
+      entity_type: 'piket_submissions',
+      entity_id: 'ALL',
+      old_data: { status: 'SUCCESS' },
+      new_data: { status: 'CANCELLED', cancelled_count: cancelledCount },
+      created_at: new Date().toISOString(),
+    });
+
+    return {
+      success: true,
+      cancelledCount,
+      message: `Berhasil mereset seluruh hasil submit piket (${cancelledCount} penetapan dibatalkan).`,
+    };
+  },
+
   // 3. Submit Piket (Atomic Submission, Revision Tracking & Idempotency)
   async submitPiket(payload: SubmitPiketPayload): Promise<SubmitPiketResult> {
     const validUUID = ensureValidUUID(payload.client_request_id);
