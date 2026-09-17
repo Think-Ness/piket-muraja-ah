@@ -20,7 +20,11 @@ import {
   RefreshCw,
   FileSpreadsheet,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  SlidersHorizontal,
+  CheckSquare,
+  Square,
+  X
 } from 'lucide-react';
 
 export default function AdminKamarPage() {
@@ -29,7 +33,13 @@ export default function AdminKamarPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
-  // Edit Limit Drawer State
+  // Multi-selection state for Bulk Actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkLimitModalOpen, setIsBulkLimitModalOpen] = useState(false);
+  const [bulkNewLimit, setBulkNewLimit] = useState<number>(2);
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
+
+  // Single Edit Limit Drawer State
   const [editingKamar, setEditingKamar] = useState<KamarOverview | null>(null);
   const [newLimit, setNewLimit] = useState<number>(1);
   const [isSavingLimit, setIsSavingLimit] = useState(false);
@@ -62,6 +72,22 @@ export default function AdminKamarPage() {
     k.nama_kamar.toLowerCase().includes(search.toLowerCase())
   );
 
+  const isAllSelected = filteredKamar.length > 0 && filteredKamar.every((k) => selectedIds.includes(k.id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredKamar.map((k) => k.id));
+    }
+  };
+
+  const handleToggleSelectRow = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
   const handleToggleAdaPiket = async (k: KamarOverview) => {
     const nextState = !k.ada_piket;
     try {
@@ -70,6 +96,38 @@ export default function AdminKamarPage() {
       await loadData();
     } catch (err: any) {
       showToast(err.message || 'Gagal mengubah status piket kamar.', 'error');
+    }
+  };
+
+  // Bulk Actions
+  const handleExecuteBulkLimit = async () => {
+    if (selectedIds.length === 0) return;
+    setIsProcessingBulk(true);
+    try {
+      await DataService.bulkUpdateKamarLimit(selectedIds, bulkNewLimit, 'Admin');
+      showToast(`Limit kuota ${selectedIds.length} kamar berhasil diubah menjadi ${bulkNewLimit} orang.`, 'success');
+      setIsBulkLimitModalOpen(false);
+      setSelectedIds([]);
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengubah limit masal.', 'error');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
+  const handleExecuteBulkAdaPiket = async (adaPiket: boolean) => {
+    if (selectedIds.length === 0) return;
+    setIsProcessingBulk(true);
+    try {
+      await DataService.bulkToggleKamarAdaPiket(selectedIds, adaPiket, 'Admin');
+      showToast(`${selectedIds.length} kamar berhasil diubah menjadi: ${adaPiket ? 'Ada Piket' : 'Non-Piket'}.`, 'success');
+      setSelectedIds([]);
+      await loadData();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengubah status piket masal.', 'error');
+    } finally {
+      setIsProcessingBulk(false);
     }
   };
 
@@ -128,7 +186,7 @@ export default function AdminKamarPage() {
             Manajemen Kamar
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            Atur status tugas piket per kamar, batas kuota limit, dan periksa riwayat revisi penetapan.
+            Atur status tugas piket per kamar, batas kuota limit, edit masal, dan periksa riwayat revisi penetapan.
           </p>
         </div>
 
@@ -144,6 +202,61 @@ export default function AdminKamarPage() {
           </Button>
         </div>
       </div>
+
+      {/* Floating Bulk Action Bar */}
+      {selectedIds.length > 0 && (
+        <div className="rounded-xl border border-slate-900 bg-slate-900 text-white p-3.5 shadow-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">
+              {selectedIds.length}
+            </span>
+            <span className="font-semibold">Kamar Terpilih untuk Tindakan Masal:</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBulkLimitModalOpen(true)}
+              disabled={isProcessingBulk}
+              className="h-8 px-3 text-xs bg-white text-slate-900 hover:bg-slate-100 border-none font-semibold"
+            >
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              <span>Ubah Limit Masal</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExecuteBulkAdaPiket(true)}
+              disabled={isProcessingBulk}
+              className="h-8 px-3 text-xs bg-emerald-700 hover:bg-emerald-600 text-white border-none font-semibold"
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>Set Ada Piket</span>
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExecuteBulkAdaPiket(false)}
+              disabled={isProcessingBulk}
+              className="h-8 px-3 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border-none font-semibold"
+            >
+              <ToggleLeft className="h-3.5 w-3.5" />
+              <span>Tiadakan Piket</span>
+            </Button>
+
+            <button
+              onClick={() => setSelectedIds([])}
+              className="p-1.5 rounded-md hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Batal Pilih"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search Toolbar */}
       <div className="flex items-center justify-between gap-3">
@@ -168,6 +281,15 @@ export default function AdminKamarPage() {
           <table className="w-full text-left border-collapse table-dense">
             <thead>
               <tr>
+                <th className="w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                    title="Pilih Semua Kamar"
+                  />
+                </th>
                 <th>No</th>
                 <th>Nama Kamar</th>
                 <th>Tugas Piket</th>
@@ -181,84 +303,100 @@ export default function AdminKamarPage() {
             <tbody className="divide-y divide-slate-100 text-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-slate-400">
+                  <td colSpan={9} className="text-center py-8 text-slate-400">
                     Memuat data kamar...
                   </td>
                 </tr>
               ) : filteredKamar.length > 0 ? (
-                filteredKamar.map((k, idx) => (
-                  <tr key={k.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="text-slate-400 text-xs w-10">{idx + 1}</td>
-                    <td className="font-semibold text-slate-900">{k.nama_kamar}</td>
-                    <td>
-                      <button
-                        onClick={() => handleToggleAdaPiket(k)}
-                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-colors ${
-                          k.ada_piket
-                            ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
-                        }`}
-                        title="Klik untuk mengubah status tugas piket kamar ini"
-                      >
-                        {k.ada_piket ? 'Ada Piket' : 'Non-Piket'}
-                      </button>
-                    </td>
-                    <td>{k.total_guru} orang</td>
-                    <td className="font-semibold">
-                      {k.ada_piket ? `${k.limit_piket} orang` : '-'}
-                    </td>
-                    <td>
-                      {k.ada_piket ? (
-                        <>
-                          <span className={k.total_piket_terpilih >= k.limit_piket ? 'text-emerald-700 font-semibold' : ''}>
-                            {k.total_piket_terpilih}
-                          </span>{' '}
-                          / {k.limit_piket}
-                        </>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td>
-                      {k.has_revisions ? (
+                filteredKamar.map((k, idx) => {
+                  const isSelected = selectedIds.includes(k.id);
+                  return (
+                    <tr
+                      key={k.id}
+                      className={`hover:bg-slate-50/70 transition-colors ${
+                        isSelected ? 'bg-slate-50 font-medium' : ''
+                      }`}
+                    >
+                      <td className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectRow(k.id)}
+                          className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer"
+                        />
+                      </td>
+                      <td className="text-slate-400 text-xs w-8">{idx + 1}</td>
+                      <td className="font-semibold text-slate-900">{k.nama_kamar}</td>
+                      <td>
                         <button
-                          onClick={() => setInspectingRevisionKamar(k)}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200 transition-colors"
+                          onClick={() => handleToggleAdaPiket(k)}
+                          className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-colors ${
+                            k.ada_piket
+                              ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                          }`}
+                          title="Klik untuk mengubah status tugas piket kamar ini"
                         >
-                          <History className="h-3 w-3" />
-                          <span>Ada Revisi ({k.revision_count}x edit)</span>
+                          {k.ada_piket ? 'Ada Piket' : 'Non-Piket'}
                         </button>
-                      ) : (
-                        <span className="text-slate-400 text-xs">-</span>
-                      )}
-                    </td>
-                    <td className="text-right space-x-1.5 whitespace-nowrap">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenEditLimit(k)}
-                        disabled={!k.ada_piket}
-                        className="h-7 px-2 text-xs"
-                      >
-                        <Edit className="h-3 w-3" />
-                        <span>Edit Limit</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleOpenReset(k)}
-                        disabled={k.total_piket_terpilih === 0}
-                        className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                        <span>Reset</span>
-                      </Button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td>{k.total_guru} orang</td>
+                      <td className="font-semibold">
+                        {k.ada_piket ? `${k.limit_piket} orang` : '-'}
+                      </td>
+                      <td>
+                        {k.ada_piket ? (
+                          <>
+                            <span className={k.total_piket_terpilih >= k.limit_piket ? 'text-emerald-700 font-semibold' : ''}>
+                              {k.total_piket_terpilih}
+                            </span>{' '}
+                            / {k.limit_piket}
+                          </>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td>
+                        {k.has_revisions ? (
+                          <button
+                            onClick={() => setInspectingRevisionKamar(k)}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-purple-100 text-purple-800 border border-purple-200 hover:bg-purple-200 transition-colors"
+                          >
+                            <History className="h-3 w-3" />
+                            <span>Ada Revisi ({k.revision_count}x edit)</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="text-right space-x-1.5 whitespace-nowrap">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleOpenEditLimit(k)}
+                          disabled={!k.ada_piket}
+                          className="h-7 px-2 text-xs"
+                        >
+                          <Edit className="h-3 w-3" />
+                          <span>Edit Limit</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenReset(k)}
+                          disabled={k.total_piket_terpilih === 0}
+                          className="h-7 px-2 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          <span>Reset</span>
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-slate-500 text-xs">
+                  <td colSpan={9} className="text-center py-8 text-slate-500 text-xs">
                     Tidak ada kamar ditemukan.
                   </td>
                 </tr>
@@ -267,6 +405,62 @@ export default function AdminKamarPage() {
           </table>
         </div>
       </div>
+
+      {/* Bulk Edit Limit Modal */}
+      <Dialog
+        isOpen={isBulkLimitModalOpen}
+        onClose={() => setIsBulkLimitModalOpen(false)}
+        title="Ubah Kuota Limit Piket Masal"
+        description={`Terapkan jumlah limit kuota piket guru untuk ${selectedIds.length} kamar terpilih sekaligus.`}
+        maxWidth="sm"
+      >
+        <div className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-700 mb-1.5">
+              Batas Kuota Baru (Orang per Kamar):
+            </label>
+            <div className="flex items-center gap-3">
+              {[1, 2, 3, 4, 5].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setBulkNewLimit(val)}
+                  className={`flex-1 py-2 rounded-lg border font-bold text-sm transition-all ${
+                    bulkNewLimit === val
+                      ? 'border-slate-900 bg-slate-900 text-white shadow-xs'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {val}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-[11px] text-slate-600">
+            Perubahan ini akan otomatis memperbarui batas kuota pada {selectedIds.length} kamar terpilih di database.
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBulkLimitModalOpen(false)}
+              disabled={isProcessingBulk}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleExecuteBulkLimit}
+              disabled={isProcessingBulk}
+            >
+              {isProcessingBulk ? 'Menyimpan...' : 'Terapkan ke Semua'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
 
       {/* Inspect Revision Comparison Modal */}
       <Dialog
@@ -302,11 +496,13 @@ export default function AdminKamarPage() {
 
               {/* Latest Revision Card */}
               <div className="rounded-lg border border-purple-200 bg-purple-50/50 p-4 space-y-2">
-                <div className="flex items-center justify-between border-b border-purple-200 pb-2">
+                <div className="flex items-center justify-between border-b border-purple-100 pb-2">
                   <span className="font-bold text-purple-900 uppercase tracking-wider">
                     Revisi Terakhir
                   </span>
-                  <Badge variant="accent" size="sm">Versi {inspectingRevisionKamar.revision_count + 1}</Badge>
+                  <Badge variant="accent" size="sm">
+                    Revisi ke-{inspectingRevisionKamar.revision_count}
+                  </Badge>
                 </div>
                 <div className="text-[11px] text-purple-700">
                   Waktu: {inspectingRevisionKamar.latest_submitted_at ? new Date(inspectingRevisionKamar.latest_submitted_at).toLocaleString('id-ID') : '-'}
@@ -322,8 +518,12 @@ export default function AdminKamarPage() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex justify-end">
-              <Button variant="outline" size="sm" onClick={() => setInspectingRevisionKamar(null)}>
+            <div className="flex justify-end pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setInspectingRevisionKamar(null)}
+              >
                 Tutup
               </Button>
             </div>
@@ -331,58 +531,35 @@ export default function AdminKamarPage() {
         )}
       </Dialog>
 
-      {/* Edit Limit Drawer */}
+      {/* Single Edit Limit Drawer */}
       <Drawer
         isOpen={Boolean(editingKamar)}
         onClose={() => setEditingKamar(null)}
-        title="Edit Limit Kuota Piket"
-        description="Ubah jumlah maksimal guru yang dapat piket untuk kamar ini."
-        width="md"
+        title={`Edit Limit Kuota Piket: Kamar ${editingKamar?.nama_kamar}`}
+        description="Atur jumlah maksimal guru yang dapat piket untuk kamar ini."
       >
         {editingKamar && (
-          <div className="space-y-5">
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs space-y-2">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Nama Kamar:</span>
-                <span className="font-semibold text-slate-900">{editingKamar.nama_kamar}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Jumlah Anggota:</span>
-                <span className="font-semibold text-slate-900">{editingKamar.total_guru} orang</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Piket Aktif Saat Ini:</span>
-                <span className="font-semibold text-slate-900">{editingKamar.total_piket_terpilih} orang</span>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">
-                Limit Piket Baru
+          <div className="space-y-5 text-xs">
+            <div className="space-y-2">
+              <label className="font-semibold text-slate-700 block">
+                Batas Kuota Limit (Orang)
               </label>
               <Input
                 type="number"
                 min={0}
-                max={20}
+                max={10}
                 value={newLimit}
-                onChange={(e) => setNewLimit(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                onChange={(e) => setNewLimit(parseInt(e.target.value) || 0)}
               />
+              <p className="text-[11px] text-slate-500">
+                Kamar ini saat ini memiliki {editingKamar.total_piket_terpilih} guru piket terpilih dari total {editingKamar.total_guru} anggota.
+              </p>
             </div>
 
-            {/* Warning if new limit < active piket count */}
-            {newLimit < editingKamar.total_piket_terpilih && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-start gap-2.5">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  <span className="font-semibold">Perhatian:</span> Limit baru ({newLimit}) berada di bawah jumlah piket aktif saat ini ({editingKamar.total_piket_terpilih}). Data piket yang sudah ada tidak akan dihapus otomatis.
-                </div>
-              </div>
-            )}
-
-            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
               <Button
                 variant="outline"
-                size="md"
+                size="sm"
                 onClick={() => setEditingKamar(null)}
                 disabled={isSavingLimit}
               >
@@ -390,52 +567,54 @@ export default function AdminKamarPage() {
               </Button>
               <Button
                 variant="primary"
-                size="md"
+                size="sm"
                 onClick={handleSaveLimit}
-                isLoading={isSavingLimit}
+                disabled={isSavingLimit}
               >
-                Simpan Perubahan
+                {isSavingLimit ? 'Menyimpan...' : 'Simpan Limit'}
               </Button>
             </div>
           </div>
         )}
       </Drawer>
 
-      {/* Reset Piket Confirmation Modal */}
+      {/* Destructive Reset Confirmation Modal */}
       <Dialog
         isOpen={Boolean(resettingKamar)}
         onClose={() => setResettingKamar(null)}
-        title="Reset Penetapan Piket Kamar"
-        description="Tindakan ini akan membatalkan seluruh status piket aktif pada kamar yang dipilih."
+        title={`Reset Penetapan Piket: Kamar ${resettingKamar?.nama_kamar}`}
+        description="Tindakan ini akan membatalkan seluruh status guru yang telah piket pada kamar ini sehingga kamar kembali menjadi belum ditetapkan."
         maxWidth="md"
       >
         {resettingKamar && (
           <div className="space-y-4 text-xs">
-            <div className="p-3.5 rounded-lg border border-red-200 bg-red-50 text-red-900 space-y-1 leading-relaxed">
-              <p className="font-semibold">Peringatan Operasional:</p>
-              <p>
-                Anda akan membatalkan penetapan piket untuk kamar{' '}
-                <span className="font-bold underline">{resettingKamar.nama_kamar}</span>.
-                Data histori tetap tersimpan di database untuk keperluan audit log.
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-800 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold">
+                <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                <span>Peringatan Keamanan</span>
+              </div>
+              <p className="leading-relaxed">
+                Tindakan ini bersifat permanen. Data riwayat penetapan untuk kamar ini akan diarsipkan sebagai dibatalkan.
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Ketik <span className="font-bold text-slate-900 uppercase">{resettingKamar.nama_kamar}</span> untuk melanjutkan konfirmasi:
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-700 block">
+                Ketik nama kamar <span className="font-bold text-slate-900">&quot;{resettingKamar.nama_kamar.toUpperCase()}&quot;</span> untuk melanjutkan:
               </label>
               <Input
                 type="text"
                 placeholder={resettingKamar.nama_kamar.toUpperCase()}
                 value={typedConfirmation}
                 onChange={(e) => setTypedConfirmation(e.target.value)}
+                autoFocus
               />
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <Button
                 variant="outline"
-                size="md"
+                size="sm"
                 onClick={() => setResettingKamar(null)}
                 disabled={isResetting}
               >
@@ -443,15 +622,14 @@ export default function AdminKamarPage() {
               </Button>
               <Button
                 variant="danger"
-                size="md"
+                size="sm"
                 onClick={handleConfirmReset}
-                isLoading={isResetting}
                 disabled={
-                  typedConfirmation.trim().toUpperCase() !== resettingKamar.nama_kamar.toUpperCase() ||
-                  isResetting
+                  isResetting ||
+                  typedConfirmation.trim().toUpperCase() !== resettingKamar.nama_kamar.toUpperCase()
                 }
               >
-                Reset Penetapan
+                {isResetting ? 'Mereset...' : 'Ya, Reset Kamar'}
               </Button>
             </div>
           </div>

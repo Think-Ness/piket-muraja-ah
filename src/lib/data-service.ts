@@ -21,6 +21,7 @@ let memorySettings: EventSettings = {
   academic_year: '1447–1448 H',
   form_status: 'OPEN',
   waktu_buka: null,
+  waktu_tutup: null,
   whatsapp_number: '6281234567890',
   whatsapp_label: 'Bantuan Panitia',
   updated_at: new Date().toISOString(),
@@ -451,6 +452,39 @@ export const DataService = {
     return { ...kamar };
   },
 
+  async bulkUpdateKamarLimit(kamarIds: string[], newLimit: number, actor = 'Admin'): Promise<void> {
+    if (kamarIds.length === 0) return;
+    const limit = Math.max(0, newLimit);
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('kamar')
+          .update({ limit_piket: limit, updated_at: new Date().toISOString() })
+          .in('id', kamarIds);
+      } catch (err) {
+        console.warn('Supabase bulkUpdateKamarLimit fallback:', err);
+      }
+    }
+
+    memoryKamar.forEach((k) => {
+      if (kamarIds.includes(k.id)) {
+        k.limit_piket = limit;
+        k.updated_at = new Date().toISOString();
+      }
+    });
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'BULK_UPDATE_KAMAR_LIMIT',
+      entity_type: 'kamar',
+      entity_id: kamarIds.join(','),
+      new_data: { limit_piket: limit, total_kamar: kamarIds.length },
+      created_at: new Date().toISOString(),
+    });
+  },
+
   async toggleKamarAdaPiket(kamarId: string, adaPiket: boolean, actor = 'Admin'): Promise<Kamar> {
     if (isSupabaseConfigured()) {
       try {
@@ -488,6 +522,38 @@ export const DataService = {
     });
 
     return { ...kamar };
+  },
+
+  async bulkToggleKamarAdaPiket(kamarIds: string[], adaPiket: boolean, actor = 'Admin'): Promise<void> {
+    if (kamarIds.length === 0) return;
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = createClient();
+        await supabase
+          .from('kamar')
+          .update({ ada_piket: adaPiket, updated_at: new Date().toISOString() })
+          .in('id', kamarIds);
+      } catch (err) {
+        console.warn('Supabase bulkToggleKamarAdaPiket fallback:', err);
+      }
+    }
+
+    memoryKamar.forEach((k) => {
+      if (kamarIds.includes(k.id)) {
+        k.ada_piket = adaPiket;
+        k.updated_at = new Date().toISOString();
+      }
+    });
+
+    memoryAuditLogs.unshift({
+      id: `a_${Date.now()}`,
+      actor_id: actor,
+      action: 'BULK_TOGGLE_KAMAR_PIKET',
+      entity_type: 'kamar',
+      entity_id: kamarIds.join(','),
+      new_data: { ada_piket: adaPiket, total_kamar: kamarIds.length },
+      created_at: new Date().toISOString(),
+    });
   },
 
   async resetKamarPiket(kamarId: string, actor = 'Admin'): Promise<{ success: boolean; message: string }> {
@@ -544,33 +610,134 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_piket', {
-          p_kamar_id: payload.kamar_id,
-          p_guru_ids: payload.guru_ids,
-          p_submitted_by: payload.submitted_by || 'Petugas Kamar',
-          p_client_request_id: validUUID,
-        });
 
-        if (rpcErr) {
-          console.error('Supabase submit_piket RPC error:', rpcErr);
-          throw new Error(rpcErr.message || 'Gagal menyimpan ke database Supabase.');
-        }
+        // 1. Check idempotency
+        const { data: existingSub } = await supabase
+          .from('piket_submissions')
+          .select('id')
+          .eq('client_request_id', validUUID)
+          .eq('status', 'SUCCESS')
+          .single();
 
-        if (rpcRes) {
+        if (existingSub) {
           return {
-            success: Boolean(rpcRes.success),
-            idempotent: Boolean(rpcRes.idempotent),
-            submission_id: rpcRes.submission_id,
-            is_revision: Boolean(rpcRes.is_revision),
-            message: rpcRes.message || 'Penetapan piket berhasil disimpan.',
+            success: true,
+            idempotent: true,
+            submission_id: existingSub.id,
+            message: 'Penetapan telah tersimpan sebelumnya.',
           };
         }
+
+        // 2. Check settings
+        const settings = await this.getSettings();
+        if (settings.form_status === 'CLOSED') {
+          throw new Error('FORM_CLOSED: Form penentuan piket saat ini telah ditutup oleh panitia.');
+        }
+        if (settings.form_status === 'MAINTENANCE') {
+          throw new Error('FORM_MAINTENANCE: Sistem sedang dalam pemeliharaan. Silakan coba beberapa saat lagi.');
+        }
+
+        // 3. Validate selected count
+        if (!payload.guru_ids || payload.guru_ids.length === 0) {
+          throw new Error('NO_GURU_SELECTED: Anda belum memilih guru untuk penetapan piket.');
+        }
+
+        // 4. Validate kamar
+        const { data: kamar, error: kErr } = await supabase.from('kamar').select('*').eq('id', payload.kamar_id).single();
+        if (kErr || !kamar) throw new Error('KAMAR_NOT_FOUND: Kamar tidak ditemukan.');
+        if (!kamar.aktif) throw new Error('KAMAR_INACTIVE: Kamar ini berstatus nonaktif.');
+        if (kamar.ada_piket === false) throw new Error('KAMAR_NO_PIKET: Kamar ini tidak memerlukan tugas piket.');
+
+        const limitPiket = kamar.limit_piket ?? 1;
+        if (payload.guru_ids.length > limitPiket) {
+          throw new Error(`LIMIT_EXCEEDED: Jumlah guru yang dipilih (${payload.guru_ids.length}) melebihi batas limit ${limitPiket} orang untuk kamar ${kamar.nama_kamar}.`);
+        }
+
+        // 5. Check if any selected guru is already assigned to a DIFFERENT active room
+        const { data: otherActiveSubs } = await supabase
+          .from('piket_submissions')
+          .select('piket_submission_members(guru_id, guru(nama))')
+          .neq('kamar_id', payload.kamar_id)
+          .eq('status', 'SUCCESS');
+
+        const otherAssignedMap = new Map<string, string>();
+        (otherActiveSubs || []).forEach((s: any) => {
+          (s.piket_submission_members || []).forEach((m: any) => {
+            if (m.guru_id) {
+              otherAssignedMap.set(m.guru_id, m.guru?.nama || 'Guru');
+            }
+          });
+        });
+
+        for (const gid of payload.guru_ids) {
+          if (otherAssignedMap.has(gid)) {
+            const gName = otherAssignedMap.get(gid);
+            throw new Error(`GURU_ALREADY_ASSIGNED: Guru ${gName} sudah ditetapkan sebagai piket aktif di kamar lain.`);
+          }
+        }
+
+        // 6. Handle previous submission of this SAME room (Revision Mode)
+        const { data: activeSubsOfThisRoom } = await supabase
+          .from('piket_submissions')
+          .select('id, piket_submission_members(guru(nama))')
+          .eq('kamar_id', payload.kamar_id)
+          .eq('status', 'SUCCESS');
+
+        const isRevision = Boolean(activeSubsOfThisRoom && activeSubsOfThisRoom.length > 0);
+
+        // Cancel previous active submission for this room
+        if (isRevision) {
+          await supabase
+            .from('piket_submissions')
+            .update({ status: 'CANCELLED' })
+            .eq('kamar_id', payload.kamar_id)
+            .eq('status', 'SUCCESS');
+        }
+
+        // 7. Insert new submission
+        const { data: newSub, error: insErr } = await supabase
+          .from('piket_submissions')
+          .insert({
+            kamar_id: payload.kamar_id,
+            submitted_by: payload.submitted_by || 'Petugas Kamar',
+            status: 'SUCCESS',
+            client_request_id: validUUID,
+            notes: payload.notes || null,
+          })
+          .select()
+          .single();
+
+        if (insErr || !newSub) {
+          console.error('Insert piket_submission failed:', insErr);
+          throw new Error(insErr?.message || 'Gagal menyimpan penetapan piket.');
+        }
+
+        // 8. Insert submission members
+        const memberInserts = payload.guru_ids.map((gid) => ({
+          submission_id: newSub.id,
+          guru_id: gid,
+        }));
+
+        const { error: memErr } = await supabase.from('piket_submission_members').insert(memberInserts);
+        if (memErr) {
+          console.error('Insert piket_submission_members failed:', memErr);
+          throw new Error(memErr.message || 'Gagal mencatat anggota piket.');
+        }
+
+        return {
+          success: true,
+          idempotent: false,
+          submission_id: newSub.id,
+          is_revision: isRevision,
+          message: isRevision
+            ? `Revisi penetapan untuk kamar ${kamar.nama_kamar} berhasil diperbarui.`
+            : `Penetapan ${payload.guru_ids.length} guru untuk kamar ${kamar.nama_kamar} berhasil disimpan.`,
+        };
       } catch (err: any) {
-        // If error was thrown explicitly from RPC constraint, rethrow so UI displays user friendly reason
         if (err.message && !err.message.includes('fetch') && !err.message.includes('Failed to fetch')) {
           throw err;
         }
-        console.warn('Supabase submitPiket RPC unavailable, falling back to local:', err);
+        console.warn('Supabase direct submit fallback to memory:', err);
       }
     }
 
@@ -803,7 +970,7 @@ export const DataService = {
     }));
   },
 
-  // 6. Import Execution (Auto-filters junk categories)
+  // 6. Import Execution (Auto-filters junk categories & handles full reset / append)
   async executeImport(
     validRows: ValidatedImportRow[],
     mode: 'SYNC' | 'APPEND',
@@ -820,29 +987,38 @@ export const DataService = {
     if (isSupabaseConfigured()) {
       try {
         const supabase = createClient();
-        // 1. Get or create kamar in Supabase
+
+        if (mode === 'SYNC') {
+          // Reset all submissions, gurus, and kamar
+          await supabase.from('piket_submission_members').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          await supabase.from('piket_submissions').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          await supabase.from('guru').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+          await supabase.from('kamar').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        }
+
+        // 1. Get or create distinct rooms
+        const uniqueRoomNames = Array.from(new Set(cleanedRows.map((r) => r.nama_kamar.trim())));
         const { data: existingKamar } = await supabase.from('kamar').select('*');
         const roomMap = new Map<string, string>();
-        (existingKamar || []).forEach((k) => roomMap.set(k.nama_kamar.toLowerCase(), k.id));
+        (existingKamar || []).forEach((k) => roomMap.set(k.nama_kamar.toLowerCase().trim(), k.id));
 
-        for (const r of cleanedRows) {
-          const key = r.nama_kamar.toLowerCase();
-          if (!roomMap.has(key)) {
-            const { data: newK } = await supabase
-              .from('kamar')
-              .insert({
-                nama_kamar: r.nama_kamar,
-                limit_piket: 2,
-                ada_piket: true,
-                aktif: true,
-                urutan: (roomMap.size + 1),
-              })
-              .select()
-              .single();
-            if (newK) {
-              roomMap.set(key, newK.id);
-            }
-          }
+        const roomsToInsert = uniqueRoomNames
+          .filter((name) => !roomMap.has(name.toLowerCase()))
+          .map((name, idx) => ({
+            nama_kamar: name,
+            limit_piket: 2,
+            ada_piket: true,
+            aktif: true,
+            urutan: roomMap.size + idx + 1,
+          }));
+
+        if (roomsToInsert.length > 0) {
+          const { data: newRooms, error: rErr } = await supabase
+            .from('kamar')
+            .insert(roomsToInsert)
+            .select();
+          if (rErr) throw new Error(`Gagal membuat master kamar: ${rErr.message}`);
+          (newRooms || []).forEach((k) => roomMap.set(k.nama_kamar.toLowerCase().trim(), k.id));
         }
 
         // 2. Insert batch record
@@ -861,23 +1037,46 @@ export const DataService = {
 
         const activeBatchId = batchData?.id || batchId;
 
-        // 3. Upsert Gurus
+        // 3. Prepare Gurus batch
+        const guruInserts: Array<{
+          rnk: number;
+          nama: string;
+          kamar_id: string;
+          tahun: string;
+          aktif: boolean;
+          source_import_batch_id: string;
+        }> = [];
+
         for (const r of cleanedRows) {
-          const kamarId = roomMap.get(r.nama_kamar.toLowerCase());
+          const kamarId = roomMap.get(r.nama_kamar.toLowerCase().trim());
           if (kamarId) {
-            await supabase.from('guru').upsert(
-              {
-                rnk: r.rnk || 1,
-                nama: r.nama,
-                kamar_id: kamarId,
-                tahun: r.tahun,
-                aktif: true,
-                source_import_batch_id: activeBatchId,
-              },
-              { onConflict: 'nama,kamar_id' }
-            );
+            guruInserts.push({
+              rnk: r.rnk || 1,
+              nama: r.nama.trim(),
+              kamar_id: kamarId,
+              tahun: r.tahun.trim(),
+              aktif: true,
+              source_import_batch_id: activeBatchId,
+            });
           }
         }
+
+        // Chunk inserts to guarantee fast & reliable execution
+        const chunkSize = 150;
+        for (let i = 0; i < guruInserts.length; i += chunkSize) {
+          const chunk = guruInserts.slice(i, i + chunkSize);
+          const { error: gErr } = await supabase.from('guru').insert(chunk);
+          if (gErr) throw new Error(`Gagal menyimpan data guru: ${gErr.message}`);
+        }
+
+        // 4. Audit Log
+        await supabase.from('audit_logs').insert({
+          actor_id: actor,
+          action: mode === 'SYNC' ? 'SYNC_IMPORT_RESET' : 'APPEND_IMPORT_GURU',
+          entity_type: 'import_batches',
+          entity_id: activeBatchId,
+          new_data: { file_name: fileName, mode, total_imported: guruInserts.length },
+        });
 
         return {
           id: activeBatchId,
@@ -889,8 +1088,9 @@ export const DataService = {
           imported_by: actor,
           created_at: new Date().toISOString(),
         };
-      } catch (err) {
-        console.warn('Supabase executeImport fallback:', err);
+      } catch (err: any) {
+        console.error('Supabase executeImport failed:', err);
+        throw new Error(err.message || 'Gagal menyimpan hasil import ke database Supabase.');
       }
     }
 

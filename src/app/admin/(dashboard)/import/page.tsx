@@ -8,6 +8,7 @@ import { ImportValidationResult } from '@/types';
 import { DataService } from '@/lib/data-service';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog } from '@/components/ui/dialog';
 import { useToast } from '@/components/ui/toast';
 import { 
   FileSpreadsheet, 
@@ -18,7 +19,9 @@ import {
   ArrowRight, 
   ArrowLeft,
   RefreshCw,
-  Info
+  Info,
+  Layers,
+  Trash2
 } from 'lucide-react';
 
 type Step = 'UPLOAD' | 'PREVIEW' | 'COMPLETE';
@@ -33,6 +36,10 @@ export default function AdminImportPage() {
   const [importMode, setImportMode] = useState<'SYNC' | 'APPEND'>('SYNC');
   const [isProcessing, setIsProcessing] = useState(false);
   const [importedBatch, setImportedBatch] = useState<any>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Destructive Confirmation Modal for SYNC mode
+  const [isResetConfirmModalOpen, setIsResetConfirmModalOpen] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const uploadedFile = e.target.files?.[0];
@@ -40,6 +47,7 @@ export default function AdminImportPage() {
 
     setFile(uploadedFile);
     setIsProcessing(true);
+    setErrorMessage(null);
 
     try {
       const buffer = await uploadedFile.arrayBuffer();
@@ -54,16 +62,29 @@ export default function AdminImportPage() {
     }
   };
 
-  const handleExecuteImport = async () => {
+  const handleTriggerImport = () => {
     if (!validationResult) return;
-
     const validRowsToImport = validationResult.rows.filter((r) => r.isValid);
     if (validRowsToImport.length === 0) {
       showToast('Tidak ada baris data valid untuk diimpor.', 'error');
       return;
     }
 
+    if (importMode === 'SYNC') {
+      setIsResetConfirmModalOpen(true);
+    } else {
+      executeImportProcess();
+    }
+  };
+
+  const executeImportProcess = async () => {
+    if (!validationResult) return;
+    const validRowsToImport = validationResult.rows.filter((r) => r.isValid);
+
+    setIsResetConfirmModalOpen(false);
     setIsProcessing(true);
+    setErrorMessage(null);
+
     try {
       const batch = await DataService.executeImport(
         validRowsToImport,
@@ -73,9 +94,11 @@ export default function AdminImportPage() {
       );
       setImportedBatch(batch);
       setStep('COMPLETE');
-      showToast(`Import berhasil: ${validRowsToImport.length} data guru disimpan.`, 'success');
+      showToast(`Import berhasil: ${validRowsToImport.length} data guru disimpan ke database.`, 'success');
     } catch (err: any) {
-      showToast(err.message || 'Gagal menjalankan proses import.', 'error');
+      const msg = err.message || 'Gagal menjalankan proses import ke database.';
+      setErrorMessage(msg);
+      showToast(msg, 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -89,7 +112,7 @@ export default function AdminImportPage() {
           Import Master Data Kamar & Guru
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-          Impor master data menggunakan file template spreadsheet Excel (.xlsx / .xls / .csv).
+          Impor master data menggunakan file template spreadsheet Excel (.xlsx / .xls / .csv) ke database Supabase.
         </p>
       </div>
 
@@ -119,7 +142,7 @@ export default function AdminImportPage() {
             2
           </span>
           <span className={`font-semibold ${step === 'PREVIEW' ? 'text-slate-900' : 'text-slate-500'}`}>
-            Validasi & Preview
+            Validasi & Pilihan Mode
           </span>
         </div>
 
@@ -138,6 +161,17 @@ export default function AdminImportPage() {
           </span>
         </div>
       </div>
+
+      {/* Error Alert */}
+      {errorMessage && (
+        <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold block">Gagal Melakukan Import:</span>
+            <p>{errorMessage}</p>
+          </div>
+        </div>
+      )}
 
       {/* Step 1: Upload */}
       {step === 'UPLOAD' && (
@@ -180,7 +214,7 @@ export default function AdminImportPage() {
               Pilih file data Kamar & Guru
             </h3>
             <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
-              Mendukung format .xlsx, .xls, atau .csv. Sistem akan memvalidasi seluruh baris sebelum melakukan import.
+              Mendukung format .xlsx, .xls, atau .csv. Sistem akan otomatis menyaring baris non-guru (sampah/alumni) dan memvalidasi struktur data.
             </p>
 
             <div className="mt-6 flex justify-center">
@@ -224,37 +258,55 @@ export default function AdminImportPage() {
           </div>
 
           {/* Import Mode Selection */}
-          <div className="rounded-lg border border-slate-200 bg-white p-4 text-xs space-y-3">
-            <span className="font-semibold text-slate-900 uppercase tracking-wider block">
-              Pilih Strategi Rekonsiliasi Import:
+          <div className="rounded-lg border border-slate-200 bg-white p-5 text-xs space-y-3">
+            <span className="font-bold text-slate-900 uppercase tracking-wider block">
+              Pilih Strategi / Opsi Import ke Database:
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Option 1: Full Replace / Reset */}
               <label
                 onClick={() => setImportMode('SYNC')}
-                className={`p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                   importMode === 'SYNC'
-                    ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                    ? 'border-amber-500 bg-amber-50/40 ring-2 ring-amber-500/20'
                     : 'border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <div className="font-semibold text-slate-900">Sync Master Data (Disarankan)</div>
-                <p className="mt-1 text-slate-500 text-[11px] leading-relaxed">
-                  Menjadikan file ini sebagai sumber kebenaran master terbaru. Guru baru ditambahkan, perubahan diperbarui, dan guru yang tidak ada dinonaktifkan.
-                </p>
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-amber-950 text-sm">
+                    <Trash2 className="h-4 w-4 text-amber-600" />
+                    <span>1. Reset & Timpa Keseluruhan (Full Replace)</span>
+                  </div>
+                  <p className="mt-2 text-slate-600 text-[11px] leading-relaxed">
+                    Mereset dan menghapus seluruh database kamar, guru, dan penetapan piket lama, kemudian mengisi ulang 100% dari file Excel ini sebagai master data baru.
+                  </p>
+                </div>
+                <div className="mt-3 text-[10px] font-semibold text-amber-800 bg-amber-100/70 px-2 py-1 rounded inline-block">
+                  ⚠️ Disarankan saat memulai periode ujian / semester baru
+                </div>
               </label>
 
+              {/* Option 2: Append Mode */}
               <label
                 onClick={() => setImportMode('APPEND')}
-                className={`p-3.5 rounded-lg border cursor-pointer transition-colors ${
+                className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
                   importMode === 'APPEND'
-                    ? 'border-slate-900 bg-slate-900/5 ring-1 ring-slate-900'
+                    ? 'border-slate-900 bg-slate-900/5 ring-2 ring-slate-900/20'
                     : 'border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <div className="font-semibold text-slate-900">Append Mode</div>
-                <p className="mt-1 text-slate-500 text-[11px] leading-relaxed">
-                  Menambahkan data baru tanpa mengubah atau menonaktifkan master data lama.
-                </p>
+                <div>
+                  <div className="flex items-center gap-2 font-bold text-slate-900 text-sm">
+                    <Layers className="h-4 w-4 text-slate-700" />
+                    <span>2. Tambah Data Baru Saja (Append)</span>
+                  </div>
+                  <p className="mt-2 text-slate-600 text-[11px] leading-relaxed">
+                    Menambahkan kamar dan guru baru tanpa menghapus kamar atau penetapan piket yang sudah ada di database.
+                  </p>
+                </div>
+                <div className="mt-3 text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded inline-block">
+                  Penetapan piket yang sudah ada tetap aman
+                </div>
               </label>
             </div>
           </div>
@@ -262,7 +314,7 @@ export default function AdminImportPage() {
           {/* Preview Table */}
           <div className="rounded-lg border border-slate-200 bg-white overflow-hidden text-xs">
             <div className="p-3 bg-slate-50 border-b border-slate-200 font-semibold text-slate-700 flex justify-between items-center">
-              <span>Preview Baris Data ({validationResult.rows.length} baris)</span>
+              <span>Preview Data Terbaca ({validationResult.rows.length} baris)</span>
               <span>Kamar terdeteksi: {validationResult.uniqueKamarNames.length}</span>
             </div>
             <div className="max-h-72 overflow-y-auto">
@@ -321,11 +373,11 @@ export default function AdminImportPage() {
             <Button
               variant="primary"
               size="md"
-              onClick={handleExecuteImport}
+              onClick={handleTriggerImport}
               isLoading={isProcessing}
               disabled={validationResult.validCount === 0 || isProcessing}
             >
-              <span>Jalankan Import ({validationResult.validCount} Data)</span>
+              <span>Mulai Import ({validationResult.validCount} Data)</span>
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
@@ -342,7 +394,7 @@ export default function AdminImportPage() {
             Import Selesai dengan Sukses
           </h2>
           <p className="mt-2 text-xs sm:text-sm text-slate-600 leading-relaxed">
-            File <span className="font-semibold text-slate-900">{importedBatch.file_name}</span> telah berhasil diproses. Sebanyak <span className="font-semibold text-slate-900">{importedBatch.valid_rows} baris data</span> telah disinkronkan ke database.
+            File <span className="font-semibold text-slate-900">{importedBatch.file_name}</span> telah berhasil diproses. Sebanyak <span className="font-semibold text-slate-900">{importedBatch.valid_rows} baris data</span> telah tersimpan ke database Supabase.
           </p>
 
           <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -369,6 +421,46 @@ export default function AdminImportPage() {
           </div>
         </div>
       )}
+
+      {/* Destructive SYNC Reset Confirmation Dialog */}
+      <Dialog
+        isOpen={isResetConfirmModalOpen}
+        onClose={() => setIsResetConfirmModalOpen(false)}
+        title="Konfirmasi Reset & Ganti Keseluruhan Database"
+        description="Anda memilih opsi 'Reset & Timpa Keseluruhan'. Mohon konfirmasi sebelum melanjutkan."
+        maxWidth="md"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-sm">
+              <AlertTriangle className="h-5 w-5 text-red-600 shrink-0" />
+              <span>PERINGATAN TINDAKAN DESTRUKTIF</span>
+            </div>
+            <p className="leading-relaxed">
+              Seluruh master data kamar, guru, dan data hasil submit penetapan piket yang lama akan <strong>dihapus dan direset secara permanen</strong>. Database akan diisi ulang 100% dari file Excel ini ({validationResult?.validCount} baris).
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsResetConfirmModalOpen(false)}
+              disabled={isProcessing}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={executeImportProcess}
+              isLoading={isProcessing}
+            >
+              {isProcessing ? 'Mereset & Mengimpor...' : 'Ya, Reset & Import Sekarang'}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 }
