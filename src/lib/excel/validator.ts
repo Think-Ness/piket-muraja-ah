@@ -14,9 +14,9 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    const nama = typeof row.Nama === 'string' ? row.Nama.trim() : '';
-    const nama_kamar = typeof row.Kamar === 'string' ? row.Kamar.trim() : '';
-    const tahun = typeof row.Tahun === 'string' ? row.Tahun.trim() : (row.Tahun ? String(row.Tahun).trim() : '');
+    const nama = row.Nama !== undefined && row.Nama !== null ? String(row.Nama).trim() : '';
+    const nama_kamar = row.Kamar !== undefined && row.Kamar !== null ? String(row.Kamar).trim() : '';
+    const tahun = row.Tahun !== undefined && row.Tahun !== null ? String(row.Tahun).trim() : '';
     
     let rnk: number | null = null;
     if (row.RNK !== undefined && row.RNK !== null && String(row.RNK).trim() !== '') {
