@@ -39,13 +39,23 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [settings, setSettings] = useState<{
+    event_name?: string;
+    academic_year?: string;
+    logo_url?: string | null;
+  } | null>(null);
 
   React.useEffect(() => {
-    DataService.getSettings().then((s) => {
-      if (s.logo_url) setLogoUrl(s.logo_url);
-    }).catch(() => {});
-  }, []);
+    DataService.getSettings()
+      .then((s) => {
+        setSettings({
+          event_name: s.event_name,
+          academic_year: s.academic_year,
+          logo_url: s.logo_url,
+        });
+      })
+      .catch(() => {});
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
@@ -64,23 +74,28 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
     return pathname.startsWith(item.href);
   };
 
+  const logoUrl = settings?.logo_url;
+  const brandTitle = settings?.event_name ? settings.event_name.toUpperCase() : "MURAJA'AH 1447";
+
   return (
     <div className="min-h-screen bg-slate-100/60 flex flex-col md:flex-row font-sans text-slate-900">
       {/* Mobile Top Bar */}
       <div className="md:hidden flex items-center justify-between bg-slate-900 text-white px-4 py-3 border-b border-slate-800 sticky top-0 z-40">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
           {logoUrl ? (
             <img
               src={logoUrl}
               alt="Logo Panitia"
-              className="h-7 w-7 rounded object-contain bg-white p-0.5"
+              className="h-7 w-7 rounded object-contain bg-white p-0.5 shrink-0"
             />
           ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-800 text-white">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-slate-800 text-white shrink-0">
               <Shield className="h-4 w-4" />
             </div>
           )}
-          <span className="font-bold text-sm tracking-tight">MURAJA&apos;AH ADMIN</span>
+          <span className="font-bold text-sm tracking-tight truncate">
+            {brandTitle}
+          </span>
         </div>
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -166,12 +181,12 @@ export const AdminShell: React.FC<AdminShellProps> = ({ children }) => {
               <Shield className="h-4 w-4" />
             </div>
           )}
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               PANEL ADMIN
             </div>
-            <div className="text-sm font-bold text-white tracking-tight">
-              MURAJA&apos;AH 1447
+            <div className="text-sm font-bold text-white tracking-tight leading-tight line-clamp-2" title={brandTitle}>
+              {brandTitle}
             </div>
           </div>
         </div>
