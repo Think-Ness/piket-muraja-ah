@@ -15,82 +15,118 @@ function cleanHeaderString(header: any): string {
     .trim();
 }
 
+export interface ParsedWorkbookResult {
+  selectedSheet: string;
+  sheetNames: string[];
+  rows: RawExcelRow[];
+}
+
 /**
- * Parses any Excel / CSV file array buffer into structured RawExcelRow array.
- * Intelligently auto-detects header row, handles multi-sheet workbooks,
+ * Parses any Excel / CSV file array buffer into structured RawExcelRow array with sheet metadata.
+ * Intelligently auto-detects header row, scores sheets based on teacher+room columns,
  * supports title offsets, and maps various Indonesian & English column naming conventions.
  */
-export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
+export function parseExcelWorkbook(buffer: ArrayBuffer, targetSheetName?: string): ParsedWorkbookResult {
   const workbook = XLSX.read(buffer, { type: 'array' });
 
   if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
     throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
   }
 
-  // 1. Find the best sheet that actually contains teacher / room data
-  let bestSheetName = workbook.SheetNames[0];
-  let bestSheetData: any[][] = [];
+  const sheetNames = workbook.SheetNames;
+
+  // 1. Determine which sheet to parse
+  let bestSheetName = sheetNames[0];
   let bestScore = -1;
 
-  for (const sheetName of workbook.SheetNames) {
-    const ws = workbook.Sheets[sheetName];
-    if (!ws) continue;
+  if (targetSheetName && sheetNames.includes(targetSheetName)) {
+    bestSheetName = targetSheetName;
+  } else {
+    // Automatically find the sheet with the most valid data containing both Nama and Kamar
+    for (const name of sheetNames) {
+      const ws = workbook.Sheets[name];
+      if (!ws) continue;
 
-    // Convert sheet to 2D array of rows
-    const raw2D: any[][] = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: '',
-      raw: false,
-      blankrows: false,
-    });
+      const raw2D: any[][] = XLSX.utils.sheet_to_json(ws, {
+        header: 1,
+        defval: '',
+        raw: false,
+        blankrows: false,
+      });
 
-    if (!raw2D || raw2D.length === 0) continue;
+      if (!raw2D || raw2D.length === 0) continue;
 
-    // Score sheet by looking for keyword matches in the first 10 rows
-    let sheetScore = 0;
-    const maxScanRows = Math.min(raw2D.length, 12);
-    for (let r = 0; r < maxScanRows; r++) {
-      const row = raw2D[r] || [];
-      for (const cell of row) {
-        const cleaned = cleanHeaderString(cell);
-        if (cleaned.includes('nama') || cleaned.includes('guru') || cleaned.includes('ustadz')) sheetScore += 3;
-        if (cleaned.includes('kamar') || cleaned.includes('asrama')) sheetScore += 3;
-        if (cleaned.includes('rank') || cleaned.includes('rnk') || cleaned === 'no') sheetScore += 1;
-        if (cleaned.includes('tahun') || cleaned.includes('thn')) sheetScore += 1;
-        if (cleaned.includes('limit') || cleaned.includes('kuota')) sheetScore += 2;
-        if (cleaned.includes('piket')) sheetScore += 2;
+      let sheetScore = 0;
+      const maxScanRows = Math.min(raw2D.length, 15);
+      for (let r = 0; r < maxScanRows; r++) {
+        const row = raw2D[r] || [];
+        let namaCol = -1;
+        let kamarCol = -1;
+
+        row.forEach((cell, idx) => {
+          const s = cleanHeaderString(cell);
+          if (s === 'nama' || s.includes('nama guru') || s.includes('nama lengkap') || s === 'guru' || s === 'ustadz') {
+            namaCol = idx;
+          }
+          if (s === 'kamar' || s.includes('nama kamar') || s === 'asrama' || s === 'ruang') {
+            kamarCol = idx;
+          }
+        });
+
+        if (namaCol !== -1 && kamarCol !== -1) {
+          // Count non-empty data rows below header
+          let validDataRows = 0;
+          for (let i = r + 1; i < raw2D.length; i++) {
+            const dataRow = raw2D[i] || [];
+            if (dataRow[namaCol] && String(dataRow[namaCol]).trim() !== '') {
+              validDataRows++;
+            }
+          }
+          sheetScore = 10000 + validDataRows;
+          break;
+        } else if (namaCol !== -1) {
+          let validDataRows = 0;
+          for (let i = r + 1; i < raw2D.length; i++) {
+            const dataRow = raw2D[i] || [];
+            if (dataRow[namaCol] && String(dataRow[namaCol]).trim() !== '') {
+              validDataRows++;
+            }
+          }
+          sheetScore = Math.max(sheetScore, 1000 + validDataRows);
+        }
+      }
+
+      if (sheetScore > bestScore) {
+        bestScore = sheetScore;
+        bestSheetName = name;
       }
     }
-
-    if (sheetScore > bestScore) {
-      bestScore = sheetScore;
-      bestSheetName = sheetName;
-      bestSheetData = raw2D;
-    }
   }
 
-  // Fallback to first sheet if no score was computed
-  if (bestSheetData.length === 0) {
-    const ws = workbook.Sheets[workbook.SheetNames[0]];
-    bestSheetData = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: '',
-      raw: false,
-      blankrows: false,
-    });
+  const selectedSheet = bestSheetName;
+  const ws = workbook.Sheets[selectedSheet];
+  if (!ws) {
+    throw new Error(`Lembar kerja '${selectedSheet}' tidak ditemukan.`);
   }
 
-  if (bestSheetData.length === 0) {
-    throw new Error('Lembar kerja Excel kosong atau tidak memiliki data.');
+  const raw2D: any[][] = XLSX.utils.sheet_to_json(ws, {
+    header: 1,
+    defval: '',
+    raw: false,
+    blankrows: false,
+  });
+
+  if (raw2D.length === 0) {
+    throw new Error(`Lembar kerja '${selectedSheet}' kosong atau tidak memiliki data.`);
   }
 
   // 2. Identify the exact Header Row index (scan first 15 rows)
   let headerRowIndex = 0;
   let maxHeaderMatch = 0;
 
-  const maxHeaderScan = Math.min(bestSheetData.length, 15);
+  const maxHeaderScan = Math.min(raw2D.length, 15);
   for (let r = 0; r < maxHeaderScan; r++) {
-    const row = bestSheetData[r] || [];
+    const row = raw2D[r] || [];
     let matchCount = 0;
 
     for (const cell of row) {
@@ -103,6 +139,7 @@ export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
         c === 'guru' ||
         c === 'kamar' ||
         c.includes('nama kamar') ||
+        c === 'asrama' ||
         c === 'rank' ||
         c === 'rnk' ||
         c === 'no' ||
@@ -123,7 +160,7 @@ export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
     }
   }
 
-  const headerRow = bestSheetData[headerRowIndex] || [];
+  const headerRow = raw2D[headerRowIndex] || [];
 
   // 3. Map Column Index to Standard Fields
   const colMap: {
@@ -223,9 +260,9 @@ export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
   }
 
   // 4. Extract data rows
-  const result: RawExcelRow[] = [];
-  for (let r = headerRowIndex + 1; r < bestSheetData.length; r++) {
-    const row = bestSheetData[r] || [];
+  const rows: RawExcelRow[] = [];
+  for (let r = headerRowIndex + 1; r < raw2D.length; r++) {
+    const row = raw2D[r] || [];
 
     // Check if row is completely empty
     const hasContent = row.some((c) => c !== null && c !== undefined && String(c).trim() !== '');
@@ -259,11 +296,22 @@ export function parseExcelFile(buffer: ArrayBuffer): RawExcelRow[] {
       }
     }
 
-    // Only include if there is at least a name or room
+    // Include if there is either a name or a room
     if (rowObj.Nama || rowObj.Kamar) {
-      result.push(rowObj);
+      rows.push(rowObj);
     }
   }
 
-  return result;
+  return {
+    selectedSheet,
+    sheetNames,
+    rows,
+  };
+}
+
+/**
+ * Backwards compatible parseExcelFile
+ */
+export function parseExcelFile(buffer: ArrayBuffer, targetSheetName?: string): RawExcelRow[] {
+  return parseExcelWorkbook(buffer, targetSheetName).rows;
 }

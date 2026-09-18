@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { parseExcelFile } from '@/lib/excel/parser';
+import { parseExcelFile, parseExcelWorkbook } from '@/lib/excel/parser';
 import { validateExcelRows } from '@/lib/excel/validator';
 import { ImportValidationResult } from '@/types';
 import { DataService } from '@/lib/data-service';
@@ -35,6 +35,9 @@ export default function AdminImportPage() {
 
   const [step, setStep] = useState<Step>('UPLOAD');
   const [file, setFile] = useState<File | null>(null);
+  const [fileBuffer, setFileBuffer] = useState<ArrayBuffer | null>(null);
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
   const [validationResult, setValidationResult] = useState<ImportValidationResult | null>(null);
   const [importMode, setImportMode] = useState<'SYNC' | 'APPEND'>('SYNC');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -62,14 +65,31 @@ export default function AdminImportPage() {
 
     try {
       const buffer = await uploadedFile.arrayBuffer();
-      const rawRows = parseExcelFile(buffer);
-      const validation = validateExcelRows(uploadedFile.name, rawRows);
+      setFileBuffer(buffer);
+      const parsed = parseExcelWorkbook(buffer);
+      setSheetNames(parsed.sheetNames);
+      setSelectedSheet(parsed.selectedSheet);
+
+      const validation = validateExcelRows(uploadedFile.name, parsed.rows);
       setValidationResult(validation);
       setStep('PREVIEW');
     } catch (err: any) {
       showToast(err.message || 'Gagal membaca file Excel.', 'error');
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  const handleSwitchSheet = (newSheet: string) => {
+    if (!fileBuffer || !file) return;
+    setSelectedSheet(newSheet);
+    try {
+      const parsed = parseExcelWorkbook(fileBuffer, newSheet);
+      const validation = validateExcelRows(file.name, parsed.rows);
+      setValidationResult(validation);
+      showToast(`Beralih ke sheet "${newSheet}" (${validation.validCount} baris valid)`, 'info');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal membaca sheet terpilih.', 'error');
     }
   };
 
@@ -274,6 +294,39 @@ export default function AdminImportPage() {
       {/* Step 2: Preview & Validation */}
       {step === 'PREVIEW' && validationResult && (
         <div className="space-y-6">
+          {/* Multi-Sheet Selector (if workbook has multiple sheets) */}
+          {sheetNames.length > 1 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-4 text-xs shadow-2xs">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-white shrink-0">
+                  <Layers className="h-4 w-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-slate-900 block text-xs">
+                    Lembar Kerja (Worksheet) Terdeteksi: <span className="text-emerald-700">{selectedSheet}</span>
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    File ini memiliki {sheetNames.length} sheet. Sistem otomatis memilih sheet dengan data guru & kamar terlengkap ({validationResult.validCount} baris).
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-slate-500 font-medium hidden sm:inline">Pilih Sheet:</span>
+                <select
+                  value={selectedSheet}
+                  onChange={(e) => handleSwitchSheet(e.target.value)}
+                  className="px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-md font-semibold text-slate-900 focus:ring-2 focus:ring-slate-900 focus:bg-white text-xs cursor-pointer shadow-xs"
+                >
+                  {sheetNames.map((sName) => (
+                    <option key={sName} value={sName}>
+                      {sName} {sName === selectedSheet ? `(Terpilih - ${validationResult.validCount} Guru)` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* Validation Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="rounded-lg border border-slate-200 bg-white p-3.5 text-xs">
