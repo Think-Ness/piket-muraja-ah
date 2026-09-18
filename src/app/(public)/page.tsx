@@ -6,8 +6,6 @@ import { DataService } from '@/lib/data-service';
 import { parseUserFriendlyError } from '@/lib/errors';
 import { GuruRow } from '@/components/kamar/guru-row';
 import { Button } from '@/components/ui/button';
-import { Dialog } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { 
   Search, 
@@ -21,8 +19,9 @@ import {
   RotateCcw,
   Check,
   ChevronRight,
-  KeyRound,
-  Trash2
+  Lock,
+  Eye,
+  Info
 } from 'lucide-react';
 
 type WizardStep = 1 | 2 | 3;
@@ -74,6 +73,9 @@ export default function PublicFormWizardPage() {
     init();
   }, []);
 
+  const isFormClosed = settings?.form_status === 'CLOSED';
+  const isFormMaintenance = settings?.form_status === 'MAINTENANCE';
+
   // Filtered rooms for Step 1 search
   const filteredRooms = useMemo(() => {
     if (!searchQuery.trim()) return piketRooms;
@@ -118,6 +120,15 @@ export default function PublicFormWizardPage() {
   }, [roomGurus, selectedGuruIds]);
 
   const handleToggleGuru = (guruId: string) => {
+    if (isFormClosed) {
+      showToast('Formulir telah ditutup oleh panitia. Anda hanya dapat melihat data penetapan.', 'info');
+      return;
+    }
+    if (isFormMaintenance) {
+      showToast('Sistem dalam pemeliharaan. Perubahan tidak diizinkan saat ini.', 'info');
+      return;
+    }
+
     setErrorMessage(null);
     if (selectedGuruIds.includes(guruId)) {
       setSelectedGuruIds((prev) => prev.filter((id) => id !== guruId));
@@ -132,6 +143,10 @@ export default function PublicFormWizardPage() {
   };
 
   const handleExecuteSubmit = async () => {
+    if (isFormClosed) {
+      showToast('Formulir telah ditutup oleh panitia.', 'error');
+      return;
+    }
     if (!currentRoom || selectedGuruIds.length === 0) return;
 
     setIsSubmitting(true);
@@ -167,7 +182,6 @@ export default function PublicFormWizardPage() {
       setIsSubmitting(false);
     }
   };
-
 
   const handleResetForm = () => {
     setCurrentStep(1);
@@ -235,7 +249,40 @@ export default function PublicFormWizardPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-5">
+      {/* Closed / Read-Only Notice Banner from the beginning */}
+      {isFormClosed && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-950 flex items-start gap-3 shadow-xs animate-in fade-in">
+          <Lock className="h-5 w-5 text-amber-700 shrink-0 mt-0.5" />
+          <div className="space-y-1 text-xs leading-relaxed">
+            <div className="font-bold text-sm text-amber-900 flex items-center gap-2">
+              <span>Formulir Penentuan Piket Telah Ditutup</span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200/80 text-amber-900 border border-amber-300">
+                Mode Hanya Review
+              </span>
+            </div>
+            <p className="text-amber-800">
+              Periode pengisian dan pengubahan formulir oleh panitia telah berakhir. Anda tetap dapat memilih kamar untuk <strong>melihat daftar guru yang telah ditetapkan</strong> (Read-Only).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Maintenance Notice Banner */}
+      {isFormMaintenance && (
+        <div className="p-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-950 flex items-start gap-3 shadow-xs">
+          <Info className="h-5 w-5 text-blue-600 shrink-0 mt-0.5" />
+          <div className="space-y-1 text-xs leading-relaxed">
+            <div className="font-bold text-sm text-blue-900">
+              Sistem Dalam Pemeliharaan
+            </div>
+            <p className="text-blue-800">
+              Sistem sedang dalam proses pemeliharaan. Formulir hanya dapat dilihat dalam mode baca.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Wizard Progress Steps Bar */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
         <div className="flex items-center justify-between text-xs">
@@ -265,7 +312,7 @@ export default function PublicFormWizardPage() {
               2
             </span>
             <span className={`font-semibold hidden sm:inline ${currentStep === 2 ? 'text-slate-900' : 'text-slate-500'}`}>
-              Pilih Anggota Piket
+              {isFormClosed ? 'Lihat Anggota' : 'Pilih Anggota Piket'}
             </span>
           </div>
 
@@ -281,7 +328,7 @@ export default function PublicFormWizardPage() {
               3
             </span>
             <span className={`font-semibold hidden sm:inline ${currentStep === 3 ? 'text-slate-900' : 'text-slate-500'}`}>
-              Review & Submit
+              {isFormClosed ? 'Review Hasil Kamar' : 'Review & Submit'}
             </span>
           </div>
         </div>
@@ -298,7 +345,7 @@ export default function PublicFormWizardPage() {
         </div>
       )}
 
-      {/* STEP 1: CARI & PILIH KAMAR (CLEAN DROPDOWN ONLY) */}
+      {/* STEP 1: CARI & PILIH KAMAR */}
       {currentStep === 1 && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
           <div className="text-center space-y-1.5 border-b border-slate-100 pb-5">
@@ -309,7 +356,9 @@ export default function PublicFormWizardPage() {
               Pilih Kamar Guru
             </h2>
             <p className="text-xs text-slate-500 max-w-md mx-auto">
-              Ketik atau cari nama kamar tempat Anda bertugas piket pada ujian muraja&apos;ah akhir tahun.
+              {isFormClosed 
+                ? 'Pilih kamar untuk melihat daftar guru yang telah ditetapkan sebagai petugas piket.'
+                : 'Ketik atau cari nama kamar tempat Anda bertugas piket pada ujian muraja\'ah akhir tahun.'}
             </p>
           </div>
 
@@ -373,7 +422,7 @@ export default function PublicFormWizardPage() {
         </div>
       )}
 
-      {/* STEP 2: PILIH ANGGOTA KAMAR */}
+      {/* STEP 2: PILIH / LIHAT ANGGOTA KAMAR */}
       {currentStep === 2 && currentRoom && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6">
           {/* Step 2 Header */}
@@ -391,15 +440,22 @@ export default function PublicFormWizardPage() {
             </div>
           </div>
 
-          {/* Previous Submission Info Banner */}
-          {isPreviousSubmission && (
+          {/* Closed / Read Only Banner for Step 2 */}
+          {isFormClosed ? (
+            <div className="p-3.5 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 flex items-center gap-2.5">
+              <Lock className="h-4 w-4 text-amber-600 shrink-0" />
+              <div className="leading-relaxed">
+                <span className="font-semibold">Mode Hanya Review:</span> Formulir ditutup. Di bawah adalah daftar seluruh guru di kamar ini dan guru yang telah ditetapkan piket.
+              </div>
+            </div>
+          ) : isPreviousSubmission ? (
             <div className="p-3.5 rounded-lg border border-sky-200 bg-sky-50 text-xs text-sky-900 flex items-center gap-2.5">
               <ShieldCheck className="h-4 w-4 text-sky-600 shrink-0" />
               <div className="leading-relaxed">
                 <span className="font-semibold">Mode Edit Penetapan:</span> Kamar ini sebelumnya sudah pernah disubmit. Anda dapat langsung mengubah centang pilihan guru di bawah untuk memperbarui penetapan.
               </div>
             </div>
-          )}
+          ) : null}
 
           {/* Search Guru */}
           <div className="relative">
@@ -419,7 +475,8 @@ export default function PublicFormWizardPage() {
               filteredGurus.map((guru) => {
                 const isSelected = selectedGuruIds.includes(guru.id);
                 const isLimitReached = selectedGuruIds.length >= (currentRoom?.limit_piket ?? 2);
-                const isDisabled = !isSelected && isLimitReached;
+                const isDisabled = isFormClosed ? true : (!isSelected && isLimitReached);
+
                 return (
                   <GuruRow
                     key={guru.id}
@@ -454,14 +511,14 @@ export default function PublicFormWizardPage() {
               onClick={() => setCurrentStep(3)}
               disabled={selectedGuruIds.length === 0 || isSubmitting}
             >
-              <span>Lanjut ke Review ({selectedGuruIds.length} Dipilih)</span>
+              <span>{isFormClosed ? 'Lanjut ke Review Hasil' : `Lanjut ke Review (${selectedGuruIds.length} Dipilih)`}</span>
               <ArrowRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* STEP 3: Review & Final Confirmation */}
+      {/* STEP 3: Review & Final Confirmation / Result View */}
       {currentStep === 3 && currentRoom && (
         <div className="rounded-xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs space-y-6 animate-in fade-in">
           <div>
@@ -469,10 +526,12 @@ export default function PublicFormWizardPage() {
               Langkah 3 dari 3
             </div>
             <h2 className="text-lg font-bold text-slate-900">
-              Review & Konfirmasi Penetapan
+              {isFormClosed ? 'Hasil Penetapan Piket Kamar' : 'Review & Konfirmasi Penetapan'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
-              Periksa kembali daftar guru yang akan ditetapkan sebelum menyimpan data.
+              {isFormClosed 
+                ? 'Berikut adalah rincian guru yang telah ditetapkan piket untuk kamar ini.'
+                : 'Periksa kembali daftar guru yang akan ditetapkan sebelum menyimpan data.'}
             </p>
           </div>
 
@@ -487,7 +546,7 @@ export default function PublicFormWizardPage() {
               <span className="font-medium">{currentRoom.limit_piket} orang</span>
             </div>
             <div className="flex justify-between text-slate-700">
-              <span className="text-slate-500">Jumlah Dipilih:</span>
+              <span className="text-slate-500">Jumlah Ditetapkan:</span>
               <span className="font-bold text-emerald-700">
                 {selectedGuruIds.length} orang
               </span>
@@ -500,30 +559,36 @@ export default function PublicFormWizardPage() {
               Daftar Guru Terpilih ({selectedGurusList.length} Orang):
             </div>
             <div className="space-y-2">
-              {selectedGurusList.map((g, index) => (
-                <div
-                  key={g.id}
-                  className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-bold">
-                      {index + 1}
-                    </span>
-                    <div>
-                      <div className="font-bold text-slate-900">{g.nama}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {g.tahun ? `Tahun: ${g.tahun}` : ''} {g.rnk ? `• RNK #${g.rnk}` : ''}
+              {selectedGurusList.length > 0 ? (
+                selectedGurusList.map((g, index) => (
+                  <div
+                    key={g.id}
+                    className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px] font-bold">
+                        {index + 1}
+                      </span>
+                      <div>
+                        <div className="font-bold text-slate-900">{g.nama}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {g.tahun ? `Tahun: ${g.tahun}` : ''} {g.rnk ? `• RNK #${g.rnk}` : ''}
+                        </div>
                       </div>
                     </div>
+                    <Check className="h-4 w-4 text-emerald-600" />
                   </div>
-                  <Check className="h-4 w-4 text-emerald-600" />
+                ))
+              ) : (
+                <div className="text-center py-6 text-slate-400 text-xs border border-dashed border-slate-200 rounded-lg">
+                  Kamar ini belum memiliki guru yang ditetapkan.
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-4 border-t border-slate-100">
             <Button
               variant="outline"
               size="sm"
@@ -531,18 +596,36 @@ export default function PublicFormWizardPage() {
               disabled={isSubmitting}
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Kembali Edit</span>
+              <span>{isFormClosed ? 'Kembali ke Daftar Guru' : 'Kembali Edit'}</span>
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleExecuteSubmit}
-              disabled={isSubmitting}
-              isLoading={isSubmitting}
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              <span>{isPreviousSubmission ? 'Simpan Revisi Penetapan' : 'Simpan Penetapan Piket'}</span>
-            </Button>
+
+            {isFormClosed ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetForm}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span>Lihat Kamar Lain</span>
+                </Button>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-amber-100/70 text-amber-900 text-xs font-semibold border border-amber-300/80 select-none">
+                  <Lock className="h-3.5 w-3.5 text-amber-700" />
+                  <span>Form Ditutup</span>
+                </div>
+              </div>
+            ) : (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleExecuteSubmit}
+                disabled={isSubmitting}
+                isLoading={isSubmitting}
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{isPreviousSubmission ? 'Simpan Revisi Penetapan' : 'Simpan Penetapan Piket'}</span>
+              </Button>
+            )}
           </div>
         </div>
       )}
