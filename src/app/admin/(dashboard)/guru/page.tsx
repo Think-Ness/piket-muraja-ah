@@ -91,6 +91,12 @@ export default function AdminGuruPage() {
     });
   }, [gurus, search, selectedKamarId, statusFilter]);
 
+  const unassignedGurusCount = useMemo(() => {
+    return gurus.filter(
+      (g) => !g.kamar_id || g.kamar?.nama_kamar?.toLowerCase() === 'belum ditentukan' || !g.kamar
+    ).length;
+  }, [gurus]);
+
   const totalPages = Math.max(1, Math.ceil(filteredGurus.length / itemsPerPage));
   const paginatedGurus = filteredGurus.slice(
     (currentPage - 1) * itemsPerPage,
@@ -229,6 +235,42 @@ export default function AdminGuruPage() {
           </Button>
         </div>
       </div>
+
+      {/* Unassigned Room Warning Alert */}
+      {unassignedGurusCount > 0 && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-amber-950">
+                Perhatian: Terdapat {unassignedGurusCount} guru yang belum ditentukan kamarnya!
+              </p>
+              <p className="text-2xs sm:text-xs text-amber-800 mt-0.5">
+                Data guru ini tetap tersimpan aman di database dengan label kamar &quot;Belum Ditentukan&quot;. Silakan edit guru tersebut untuk memilih kamar yang tepat.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const unassignedKamar = kamarList.find(
+                (k) => k.nama_kamar.toLowerCase() === 'belum ditentukan'
+              );
+              if (unassignedKamar) {
+                setSelectedKamarId(unassignedKamar.id);
+                setCurrentPage(1);
+              } else {
+                setSearch('Belum Ditentukan');
+              }
+            }}
+            className="px-3.5 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-semibold transition-colors shrink-0 cursor-pointer text-center"
+          >
+            Tampilkan Guru Ini ({unassignedGurusCount})
+          </button>
+        </div>
+      )}
 
       {/* Filters Toolbar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-3.5 rounded-lg border border-slate-200 text-xs">

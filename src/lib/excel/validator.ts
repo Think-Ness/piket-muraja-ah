@@ -15,8 +15,8 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
     const warnings: string[] = [];
 
     const nama = row.Nama !== undefined && row.Nama !== null ? String(row.Nama).trim() : '';
-    const nama_kamar = row.Kamar !== undefined && row.Kamar !== null ? String(row.Kamar).trim() : '';
-    const tahun = row.Tahun !== undefined && row.Tahun !== null ? String(row.Tahun).trim() : '';
+    let nama_kamar = row.Kamar !== undefined && row.Kamar !== null ? String(row.Kamar).trim() : '';
+    let tahun = row.Tahun !== undefined && row.Tahun !== null ? String(row.Tahun).trim() : '';
     
     let rnk: number | null = null;
     if (row.RNK !== undefined && row.RNK !== null && String(row.RNK).trim() !== '') {
@@ -28,22 +28,26 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       }
     }
 
+    // 1. Validation for Teacher Name (Only required field)
     if (!nama) {
       errors.push('Nama guru tidak boleh kosong.');
     }
 
+    // 2. Tolerant Room assignment: if room is empty, assign "Belum Ditentukan"
     if (!nama_kamar) {
-      errors.push('Nama kamar tidak boleh kosong.');
-    } else {
-      kamarNamesSet.add(nama_kamar);
+      nama_kamar = 'Belum Ditentukan';
+      warnings.push('Nama kamar kosong. Guru dialokasikan ke "Belum Ditentukan" (dapat diperbarui nanti di menu Data Guru).');
     }
+    kamarNamesSet.add(nama_kamar);
 
+    // 3. Tolerant Year assignment
     if (!tahun) {
-      warnings.push('Kolom Tahun kosong. Akan menggunakan default tahun kegiatan aktif.');
+      tahun = '1447-1448';
+      warnings.push('Kolom Tahun kosong. Menggunakan default tahun kegiatan aktif (1447-1448).');
     }
 
-    // Process optional Ada_Piket
-    let ada_piket = true;
+    // 4. Process optional Ada_Piket
+    let ada_piket = nama_kamar !== 'Belum Ditentukan';
     if (row.Ada_Piket !== undefined && row.Ada_Piket !== null && String(row.Ada_Piket).trim() !== '') {
       const piketStr = String(row.Ada_Piket).trim().toLowerCase();
       if (['tidak', 'false', '0', 'tidak ada', 'non', 'non-piket', 'off', 'bukan'].includes(piketStr)) {
@@ -53,7 +57,7 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       }
     }
 
-    // Process optional Limit_Kamar
+    // 5. Process optional Limit_Kamar
     let limit_kamar = ada_piket ? 2 : 0;
     if (row.Limit_Kamar !== undefined && row.Limit_Kamar !== null && String(row.Limit_Kamar).trim() !== '') {
       const parsedLimit = parseInt(String(row.Limit_Kamar).trim(), 10);
@@ -67,7 +71,7 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       }
     }
 
-    // Duplicate detection in file
+    // 6. Duplicate detection in file
     if (nama && nama_kamar) {
       const key = `${nama.toLowerCase()}___${nama_kamar.toLowerCase()}`;
       if (seenTeacherKamar.has(key)) {
@@ -93,7 +97,7 @@ export function validateExcelRows(fileName: string, rawRows: RawExcelRow[]): Imp
       rnk,
       nama,
       nama_kamar,
-      tahun: tahun || '1447-1448',
+      tahun,
       limit_kamar,
       ada_piket,
       isValid,

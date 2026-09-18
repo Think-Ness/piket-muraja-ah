@@ -15,7 +15,9 @@ import {
   Users, 
   ShieldCheck, 
   History,
-  FileSpreadsheet
+  FileSpreadsheet,
+  AlertTriangle,
+  ArrowRight
 } from 'lucide-react';
 
 export default function AdminOverviewPage() {
@@ -67,8 +69,22 @@ export default function AdminOverviewPage() {
     const partial = piketRooms.filter((k) => k.status_penetapan === 'Sebagian').length;
     const pending = piketRooms.filter((k) => k.status_penetapan === 'Belum ditetapkan').length;
     const revisedCount = kamarList.filter((k) => k.has_revisions).length;
+    const unassignedRoom = kamarList.find(
+      (k) => k.nama_kamar.toLowerCase() === 'belum ditentukan'
+    );
+    const unassignedGurus = unassignedRoom ? unassignedRoom.total_guru : 0;
 
-    return { totalKamar, totalGuru, totalPiket, fulfilled, partial, pending, nonPiketRooms, revisedCount };
+    return { 
+      totalKamar, 
+      totalGuru, 
+      totalPiket, 
+      fulfilled, 
+      partial, 
+      pending, 
+      nonPiketRooms, 
+      revisedCount,
+      unassignedGurus 
+    };
   }, [kamarList]);
 
   const handleExport = () => {
@@ -110,6 +126,32 @@ export default function AdminOverviewPage() {
           </Button>
         </div>
       </div>
+
+      {/* Unassigned Guru Warning Alert */}
+      {stats.unassignedGurus > 0 && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50/90 text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs sm:text-sm font-semibold text-amber-950">
+                Peringatan Data: Ada {stats.unassignedGurus} guru di kamar &quot;Belum Ditentukan&quot;
+              </p>
+              <p className="text-2xs sm:text-xs text-amber-800 mt-0.5">
+                Data guru hasil import belum memiliki alokasi kamar definitif. Buka Master Data Guru untuk melengkapi penempatan kamar mereka.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/admin/guru"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-950 text-xs font-semibold transition-colors shrink-0"
+          >
+            <span>Kelola di Master Guru</span>
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Horizontal Compact KPI Section */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-white p-4 rounded-lg border border-slate-200 shadow-2xs text-xs">
